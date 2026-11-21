@@ -1,0 +1,17 @@
+# Keep installation data, secrets, and assistant tooling out of the manager repository.
+# Depends on the local runtime directory used by the bootstrap and API.
+.local/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.agents/
+.codex/
+.aws/
+.claude/
+.cursor/
+.ai/
+.instructions.md
+.instruction.md
+.instrcutions.md
