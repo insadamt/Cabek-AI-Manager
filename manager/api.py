@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from manager import VERSION
 from manager.backend import request_backend
-from manager.configuration import Configuration
+from manager.configuration import Configuration, SiteConfig
 from manager.jobs import Jobs
 from manager.orchestrator import Orchestrator
 from manager.storage import Store
@@ -34,6 +34,11 @@ def create_app(root=None, watch_releases=True):
             # Commit job completion before the browser reconnects to the new manager process.
             Timer(3, lambda: os._exit(42)).start()
     jobs = Jobs(store, on_complete=restart_manager)
+
+    def active_configuration():
+        # Saved settings take effect after deployment; existing services still use their installed ports.
+        installed = store.read("installed-configuration", None)
+        return SiteConfig.model_construct(**installed) if installed else configuration.load()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -103,12 +108,12 @@ def create_app(root=None, watch_releases=True):
 
     @app.get("/api/status")
     def status():
-        config = configuration.load()
+        config = active_configuration()
         return {"version": VERSION, "installed": store.read("installed", {}),
                 "updates": store.read("updates", {"components": [], "updates_available": False}),
                 "job": jobs.snapshot(), "application_url": f"http://localhost:{config.app_port}",
                 "recovery_required": bool(store.read("transaction", None)),
-                "configuration_pending": store.read("installed-configuration", None) != config.model_dump()}
+                "configuration_pending": store.read("installed-configuration", None) != configuration.load().model_dump()}
 
     @app.get("/api/services")
     def services():
@@ -156,15 +161,13 @@ def create_app(root=None, watch_releases=True):
             raise ValueError("Install the ecosystem first.")
         def operation(log):
             operations.create_runner(log).run(compose_command(store, "up", "-d", "--wait", "--wait-timeout", "180"), timeout=240)
-            from manager.configuration import SiteConfig
-            active = SiteConfig.model_construct(**store.read("installed-configuration", configuration.load().model_dump()))
-            request_backend(active, configuration.ensure_credentials(), "maintenance", {"enabled": False})
+            request_backend(active_configuration(), configuration.ensure_credentials(), "maintenance", {"enabled": False})
         return jobs.submit("Start services", operation)
 
     @app.post("/api/stop")
     def stop():
         def operation(log):
-            config = configuration.load()
+            config = active_configuration()
             from manager.backend import drain
             try:
                 drain(config, configuration.ensure_credentials(), log)
@@ -178,7 +181,7 @@ def create_app(root=None, watch_releases=True):
     def resume():
         if store.read("transaction", None):
             raise ValueError("Recover the interrupted operation first.")
-        return request_backend(configuration.load(), configuration.ensure_credentials(), "maintenance", {"enabled": False})
+        return request_backend(active_configuration(), configuration.ensure_credentials(), "maintenance", {"enabled": False})
 
     @app.post("/api/recover")
     def recover():
