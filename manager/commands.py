@@ -8,11 +8,12 @@ import signal
 import subprocess
 import tempfile
 import time
+from urllib.parse import quote, quote_plus
 
 
 class CommandRunner:
     def __init__(self, private_values=(), log=None):
-        self.private_values = [variant for value in private_values if value for variant in (value, value.replace("$", "$$"))]
+        self.private_values = [variant for value in private_values if value for variant in (value, value.replace("$", "$$"), quote(value, safe=""), quote_plus(value))]
         self.log = log or (lambda message: None)
 
     def redact(self, value):

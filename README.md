@@ -1,9 +1,9 @@
 # Cabek AI Manager
 
-Install, configure, run, and update the Cabek ecosystem on one Ubuntu/Linux PC.
-The manager depends on Python 3.11+, Docker Engine with Compose and Buildx, and
-access to the private GitHub repositories. Application services run in Docker;
-the manager runs on the host so it stays available when a service fails.
+Install, configure, run, and update the complete Cabek station on one Ubuntu/Linux PC.
+Manager owns the Docker recipes, configuration, update gateway, and private state;
+application repositories retain their original source and startup workflows.
+Requires Python 3.11+ with venv, Docker Engine, Compose/Buildx, and GitHub access.
 
 ## Start
 
@@ -13,44 +13,43 @@ cd Cabek-AI-Manager
 ./start.sh
 ```
 
-Open **http://localhost:8179**. The bootstrap creates a private Python environment.
-Authenticate with `gh auth login`, or enter a GitHub token in Configuration.
-Check prerequisites, save the station settings, and click **Install ecosystem**.
-No individual service environment files need editing.
+Open **http://localhost:8179**. Authenticate with `gh auth login` or provide a token
+in the interface. Import existing Cabek station settings or enter the real NVR,
+ESP32, and Shelly settings once. Then select **Install ecosystem**.
 
-Demo mode provides synthetic side-labelled camera images. A physical station
-requires NVR credentials, actual channels, and any enabled ESP32/Shelly devices.
-Use the prerequisite check to discover stable USB device paths.
+Every application is included: Cabek backend, Cabek frontend, Tiandy cameras,
+ESP32 lighting, E-Constat OCR, and AutoEstimate backend with MariaDB and Nginx.
+AutoEstimate Scrapper, its separate frontend, and legacy Streamlit remain excluded.
+There is no Manager demo profile or application-selection switch.
 
-## Included repositories
+Disconnected hardware remains configured and its application stays installed.
+Runtime health and physical readiness are reported separately. A detected USB
+device does not prove that LEDs respond; verify actual output on the station.
+If several USB devices are present, select the ESP32's stable `/dev/serial/by-id/`
+path. Manager refreshes its Docker mapping when that device reconnects and the
+station is idle.
 
-- Cabek-AI-Manager
-- Cabek-AI-Backend
-- Cabek-AI-Frontend
-- Cabek-Autoestimate-Backend (Laravel, Nginx, MariaDB)
-- Cabek-AI-Cam (station mode)
-- Cabek-Capture-Lights (when enabled)
-- Cabek-EConstat-OCR (when enabled)
-
-AutoEstimate's separate frontend, the scraper, and the legacy Streamlit app are
-excluded. AutoEstimate initializes through migrations, canonical seeders, and its
-dataset importer. Bundled normalized archives are imported once per checksum;
-additional dataset paths can be supplied in the interface.
+Application and API ports default to **8180** and **8181**. Private configuration,
+credentials, exact source archives, backups, and station data live under `.local/`.
+A custom data directory can be selected before installation. Existing dotenv
+settings are read without modifying their files; internal connections are resolved
+by Manager. Password fields can be left empty to retain saved credentials.
 
 ## Updates
 
-The manager checks GitHub on startup and every 15 minutes. **Only published stable
-semantic-version releases qualify.** Commits, plain tags, draft releases, and
-prereleases do not produce stable update notices.
+Only **published stable semantic-version releases** produce update notices.
+Commits, plain tags, drafts, and prereleases do not. **Update All** checks the
+entire ecosystem and installs each application's latest published version.
 
-Click **Update All** to resolve the newest published version of every included
-repository. The manager downloads exact revisions, builds before interruption,
-blocks new writes, waits for active work, backs up data, migrates, and verifies
-the replacement services. Failed deployment attempts restore the previous stack
-and database. Configuration and installation data remain private under `.local/`.
+Manager builds before interruption, closes new writes at its own gateway, waits
+for accepted native work, backs up data, and replaces containers. It uses the
+apps' existing APIs and locks; no application management endpoints are required.
+Failed deployments restore the previous stack and data. Manager self-updates use
+the host bootstrap and a prepared environment, retaining the installation state.
 
-Start the application with `start.sh` to enable manager self-updates. Its host
-bootstrap switches to a prepared revision only after service deployment succeeds.
+AutoEstimate initializes through its existing migrations, canonical seeders,
+`api:token:create`, and `observations:import`. Saved credentials and completed
+imports are retained across repeated setup and updates.
 
 ## Development checks
 
@@ -60,6 +59,7 @@ bootstrap switches to a prepared revision only after service deployment succeeds
 node --check manager/web/app.js
 ```
 
-See [architecture and acceptance checks](docs/architecture.md). Physical camera,
-serial, and lighting behavior must be verified on the connected station; synthetic
-inputs and HTTP readiness do not prove physical operation.
+See [architecture and acceptance checks](docs/architecture.md). Tests and deployment
+recipes belong to Manager. Run original application regression tests without
+editing their repositories. Physical capture and lighting checks require connected
+hardware; simulated unit-test inputs do not establish station readiness.

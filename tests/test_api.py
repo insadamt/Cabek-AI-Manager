@@ -58,7 +58,7 @@ def test_pending_port_change_keeps_open_and_resume_on_installed_services(tmp_pat
     app = create_app(tmp_path, watch_releases=False)
     app.state.store.write("installed-configuration", SiteConfig().model_dump())
     calls = []
-    monkeypatch.setattr("manager.api.request_backend", lambda config, *args: calls.append(config.api_port) or {"maintenance": False})
+    monkeypatch.setattr("manager.api.resume", lambda config, *args: calls.append(config.api_port) or {"maintenance": False})
     with TestClient(app) as client:
         assert client.put("/api/configuration", json={"app_port": 8380, "api_port": 8381}).status_code == 200
         status = client.get("/api/status").json()
@@ -73,7 +73,9 @@ def test_pending_port_change_stops_the_installed_backend(tmp_path, monkeypatch):
     app.state.store.write("installed-configuration", SiteConfig().model_dump())
     ports = []
     commands = []
-    monkeypatch.setattr("manager.backend.drain", lambda config, *args: ports.append(config.api_port))
+    from contextlib import nullcontext
+    monkeypatch.setattr("manager.orchestrator.idle_station", lambda *args: nullcontext())
+    monkeypatch.setattr("manager.orchestrator.drain", lambda config, *args: ports.append(config.api_port))
     monkeypatch.setattr("manager.commands.CommandRunner.run", lambda self, arguments, **kwargs: commands.append(arguments) or "")
     with TestClient(app) as client:
         client.put("/api/configuration", json={"api_port": 8381})
@@ -83,4 +85,5 @@ def test_pending_port_change_stops_the_installed_backend(tmp_path, monkeypatch):
             time.sleep(.01)
         assert app.state.jobs.snapshot()["status"] == "completed"
     assert ports == [8181]
-    assert commands[0][-1] == "stop"
+    assert commands[0][-2:] == ["stop", "backend"]
+    assert commands[1][-1] == "stop"

@@ -8,6 +8,7 @@ import shutil
 import tarfile
 
 from manager.system import compose_command
+from manager.configuration import Configuration, SiteConfig, data_root
 
 
 def create_backup(store, runner, log):
@@ -19,8 +20,8 @@ def create_backup(store, runner, log):
                '--single-transaction --routines --triggers "$MARIADB_DATABASE"'),
                timeout=600, output_path=folder / "database.sql", quiet=True)
     with tarfile.open(folder / "station-data.tar.gz", "w:gz") as bundle:
-        for name in ("dossiers", "runtime"):
-            path = store.root / "data" / name
+        for name in ("dossiers", "runtime", "ocr-output"):
+            path = data_root(store.root, Configuration(store).load()) / name
             if path.exists():
                 bundle.add(path, arcname=name)
     shutil.copy2(store.root / "compose.json", folder / "compose.json")
@@ -50,15 +51,20 @@ def restore_backup(store, runner, folder, log):
         result = subprocess.run(command, stdin=restored_sql, capture_output=True, timeout=600)
     if result.returncode:
         raise RuntimeError("Database restoration failed; preserve the backup and inspect database logs.")
-    data = store.root / "data"
+    import json
+    saved_config = folder / "installed-configuration.json"
+    values = json.loads(saved_config.read_text()) if saved_config.exists() else {}
+    data = data_root(store.root, SiteConfig.model_construct(**values))
     with tarfile.open(folder / "station-data.tar.gz") as bundle:
-        for name in ("dossiers", "runtime"):
+        for name in ("dossiers", "runtime", "ocr-output"):
             path = data / name
             if path.exists():
                 shutil.rmtree(path)
         bundle.extractall(data, filter="data")
-    runner.run(compose_command(store, "up", "-d", "--wait", "--wait-timeout", "180", "--remove-orphans"), timeout=240)
-    for name in ("installed", "installed-configuration", "imports"):
+    if "gateway" not in store.read("compose", {}).get("services", {}):
+        (data / "runtime/manager-maintenance.lock").unlink(missing_ok=True)
+    runner.run(compose_command(store, "up", "-d", "--wait", "--wait-timeout", "240", "--remove-orphans"), timeout=300)
+    for name in ("installed", "installed-configuration", "imports", "credentials", "configuration"):
         source = folder / (name + ".json")
         if source.exists():
             shutil.copy2(source, store.root / source.name)

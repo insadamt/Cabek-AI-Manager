@@ -1,77 +1,98 @@
-# Installation, configuration, and update architecture
+# Native application deployment and update architecture
 
-This document records the manager's important technical decisions and acceptance
-criteria. It explains why installation state is separate from source checkouts
-and depends on GitHub published releases, repository Dockerfiles, the backend's
-maintenance API, and a single Linux host with Docker access.
+This document explains why Manager owns deployment rather than changing the apps.
+It depends on published GitHub releases, original native configuration contracts,
+Docker Compose, a single Linux PC, and durable private installation state.
 
-## Ownership
+## Ownership and compatibility
 
-Each service owns its API and Docker image. `manager/catalog.py` lists supported
-repositories; `configuration.py` owns site settings and generated credentials.
-`compose.py` translates them into one private `cabek-ai-manager` Compose project.
-Existing projects on the same PC are outside its control.
+All Dockerfiles, dependency recipes, proxy configuration, and deployment tests live
+in Manager. Exact application release archives are immutable inputs. Source files
+are never patched, instrumented, or supplemented with Manager API routes. The
+corrective application commits restore the approved native baselines; subsequent
+integration work remains exclusively in this repository.
 
-The host-side manager uses background jobs for operations and atomic JSON files
-for state. An OS file lock prevents concurrent mutations across manager processes.
-The UI polls persisted operation events and can display service logs. Interrupted
-operations remain visible after restart.
-An unfinished deployment leaves a durable transaction journal. The interface
-offers recovery before further mutations; recovery restores the recorded backup
-or stops an incomplete first installation without deleting its SQL data.
+All six application repositories are mandatory. The separate AutoEstimate frontend,
+Scrapper, and legacy Streamlit are excluded. Manager provides real station setup;
+missing hardware is represented as disconnected or requiring attention.
 
-## Version selection
+## Runtime layout
 
-Candidates come from GitHub's Releases API, never its Tags API. A candidate must
-be published, non-draft, non-prerelease, and have a numeric `vMAJOR.MINOR.PATCH` tag.
-Selection compares version numbers numerically and resolves the selected release
-tag to its exact commit. A moved tag for an installed version is rejected.
+The Manager-owned gateway owns the shared Docker network namespace and host ports.
+The frontend serves on port 80 inside that namespace; its existing build-time API
+setting points to the canonical local application origin. It proxies API traffic
+through the gateway. Backend, cameras, lighting, and OCR use native loopback
+addresses in the same namespace, preserving original local-settings restrictions.
+Only gateway ports are published, bound to host loopback. AutoEstimate PHP-FPM,
+Nginx, and MariaDB use private Compose networking with a persistent SQL volume.
 
-Each repository has an independent version. One Update All action resolves every
-enabled component, retains newer installed versions instead of downgrading them,
-and downloads only missing source archives. Application services build locally
-from their release Dockerfiles. The manager has its own release and restart
-supervisor; its private state outlives the source revision that runs it.
+The backend runs `python -m api`; lighting runs `python -m lighting_api`. Camera
+startup is unchanged. OCR uses its native ASGI application and `/app/output`
+mount. No runtime JavaScript injection, backend authentication bypass, new health
+routes, changed seeders, or new Artisan commands are required in the apps.
 
-## Automatic configuration
+Image identities include source revision, deployment recipe content, and build
+parameters. Frontend port changes consequently produce a distinct recoverable
+image. Runtime tuning imported from existing native dotenv files is retained;
+Manager resolves container paths, credentials, native real-camera mode, and
+internal service addresses. Private imported values are omitted from public APIs.
 
-The manager creates persistent database credentials, Laravel APP_KEY, camera
-API key, OCR token, backend management key, and pricing client token once.
-It passes settings directly into containers instead of modifying source `.env`
-files. The production frontend proxies to its backend and reads connection mode
-at runtime, allowing the same image to work on different installations.
+## Setup and persistent state
 
-AutoEstimate's command accepts credentials on standard input and validates the
-canonical IDs used by Cabek. Dataset imports are checksum-tracked and validated
-before writes. Repeated setup does not reset the SQL database or regenerate keys.
+Manager generates stable database credentials, Laravel APP_KEY, camera/OCR keys,
+and its private gateway-control key. AutoEstimate credentials are validated and
+reused; fresh setup captures the existing native token command's output privately.
+Native migrations and canonical seeders precede checksum-tracked imports.
+
+Configuration no longer exposes profiles or per-application enable flags. The
+station form collects NVR access, channels, ESP32 device, Shelly address, ports,
+and storage locations. Existing application dotenv files are read only. Credentials
+remain private under `.local/`; assistant tooling and runtime folders are ignored.
+
+Application runtime and hardware readiness are independent. Camera readiness uses
+native frame availability; Shelly uses its existing status endpoint. Lighting
+process liveness and USB presence do not claim verified physical output. A device
+identity watcher refreshes only the lighting container mapping while native work
+is idle. Multiple devices require an explicit stable selection.
 
 ## Update transaction
 
-1. Resolve published releases and download exact source revisions.
-2. Render and validate candidate Compose configuration, then build images.
-3. Prepare any manager self-update in its own Python environment.
-4. Close backend write admission and wait for active requests, camera jobs,
-   queued/running analyses, and OCR jobs to finish.
-5. Back up SQL, dossiers, runtime state, configuration, and installed revisions.
-6. Stop API/frontend writers, migrate, seed canonical references, and import any
-   new validated datasets.
-7. Start replacement services, wait for health, and probe the manager API.
-8. Publish installed-version state and release maintenance. Queue a manager
-   process restart only after the job is persisted as completed.
+1. Resolve every repository's newest published stable numeric release and exact SHA.
+2. Download missing archives, render external recipes, build, and prepare Manager's environment.
+3. Atomically close mutation admission at the Manager gateway and finish admitted
+   HTTP requests. Stop preview streams so they do not hold native shutdown open.
+4. Acquire the existing dossier admission/capture/scan locks and check native job
+   states and OCR status. Complete a capture-to-analysis handoff before declaring idle.
+   Work waiting for vehicle metadata leaves the update unapplied with an explanation.
+5. Stop the backend only after native work is idle, then back up SQL, dossiers,
+   runtime state, OCR output, configuration, imports, and installed revisions.
+6. Journal the transaction, stop remaining services, run native migrations/seeders,
+   provision/reuse credentials, and import new datasets.
+7. Start the complete stack, set real camera operation through its existing API,
+   check native connectivity, and open admission. Hardware may remain disconnected.
+8. Publish installed revisions, clear the transaction, and queue a prepared Manager restart.
 
-Failures before mutation leave the running stack untouched. Failures after a
-backup trigger database/data restoration and restart the prior images. Original
-data volumes are never removed by normal install, start, stop, or update actions.
+A failed build or admission drain leaves running applications untouched. A backup
+failure restarts a stopped backend without applying migrations. Failures after
+mutation restore the recorded SQL/data snapshot and previous Compose/images.
+Interrupted operations remain recoverable through persisted transaction state.
+
+## Corrective handover
+
+The previous deployment is backed up before restoration. Its updater requires
+Dockerfiles inside application repositories, so the corrected host Manager is
+bootstrapped directly before using the new update path. Existing private files,
+credentials, databases, and unrelated application work are preserved. Only known
+Manager-generated sample dossiers/photos are quarantined outside active data;
+quarantined files and pre-correction backups are never silently deleted.
 
 ## Manual acceptance checklist
 
-- [ ] Fresh install completes through the interface without per-repository edits.
-- [ ] Seeded part IDs match Cabek's pricing mappings; an imported price is returned.
-- [ ] Repeating setup preserves credentials, dossiers, and pricing observations.
-- [ ] A tag without a published release produces no update notice.
-- [ ] Publishing a newer stable release produces a notice; Update All installs it.
-- [ ] A running capture/analysis finishes before replacement begins.
-- [ ] A failed build leaves the original services available.
-- [ ] Failed migration/startup recovery restores prior SQL and dossier state.
-- [ ] Manager self-update restarts into the new version and retains private state.
-- [ ] Real NVR images, ESP32 output, and Shelly switching work on the physical station.
+- [ ] Install every application without modifying individual repositories or dotenv files.
+- [ ] Confirm the light Cabek appearance and absence of Manager demo/selection controls.
+- [ ] Verify disconnected NVR/ESP32/Shelly states while applications remain installed.
+- [ ] Connect hardware and verify essential cameras, ESP32 effects, and Shelly output.
+- [ ] Complete real capture, OCR, pricing, image analysis, and PDF workflows.
+- [ ] Confirm tags/drafts/prereleases produce no notice; published stable releases do.
+- [ ] Verify Update All waits for accepted work and preserves credentials and data.
+- [ ] Verify failed deployment recovery and Manager restart retain the prior station state.

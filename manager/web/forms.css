@@ -1,0 +1,222 @@
+/* Cabek Manager appearance; depends on shared theme tokens and semantic station markup. */
+section#configuration {
+  margin-top: 50px;
+}
+#configuration-form {
+  padding: 5px 28px;
+}
+.import-row {
+  padding: 19px 23px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.import-row strong {
+  font-size: 12px;
+}
+.import-actions {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.import-actions input {
+  min-width: 230px;
+}
+fieldset {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: 24px 0 28px;
+}
+legend {
+  font-size: 13px;
+  font-weight: 700;
+  float: left;
+  width: 100%;
+  margin-bottom: 18px;
+}
+legend + .fields {
+  clear: both;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 25px;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 650;
+}
+label small {
+  font-weight: 400;
+  color: #888;
+  line-height: 1.6;
+  font-size: 10px;
+}
+input,
+textarea {
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  background: #fff;
+  padding: 11px 12px;
+  font-size: 12px;
+  min-width: 0;
+  color: #333;
+}
+textarea {
+  resize: vertical;
+}
+.dataset-label {
+  margin-top: 20px;
+}
+.form-footer {
+  padding: 22px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.form-footer p {
+  font-size: 10px;
+}
+.prerequisites {
+  margin-top: 15px;
+  padding: 17px 22px;
+}
+.prerequisites summary {
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.prerequisites button {
+  margin: 17px 0 10px;
+}
+.check {
+  padding: 9px 0;
+  font-size: 11px;
+  border-bottom: 1px solid #eee;
+}
+#activity {
+  margin: 45px 0 0;
+}
+#events {
+  padding: 23px;
+  color: #555;
+  font-size: 11px;
+  line-height: 1.8;
+  max-height: 370px;
+  min-height: 130px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#notice {
+  padding: 15px 18px;
+  background: #eff4ef;
+  color: #405a45;
+  border: 1px solid #dce7dc;
+  border-radius: 9px;
+  font-size: 12px;
+  margin-bottom: 22px;
+  line-height: 1.6;
+}
+#notice.error {
+  background: #fcf1f0;
+  border-color: #f0d8d5;
+  color: #923f37;
+}
+.page-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+  padding: 22px 0;
+  color: #999;
+  font-size: 10px;
+}
+dialog {
+  width: min(900px, 95vw);
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 25px;
+}
+dialog::backdrop {
+  background: #0004;
+}
+dialog pre {
+  font-size: 11px;
+  line-height: 1.7;
+  max-height: 65vh;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+@media (max-width: 760px) {
+  main {
+    padding: 27px 19px 0;
+  }
+  .topbar {
+    padding: 0 20px;
+    height: 67px;
+  }
+  .topbar > div {
+    font-size: 0;
+  }
+  .brand span {
+    font-size: 11px;
+  }
+  .page-heading {
+    align-items: flex-start;
+  }
+  .page-heading .button {
+    font-size: 10px;
+    padding: 10px;
+    white-space: nowrap;
+  }
+  .summary-grid {
+    gap: 8px;
+  }
+  .summary-grid article {
+    padding: 16px 12px;
+  }
+  .summary-grid small {
+    font-size: 9px;
+  }
+  .hardware-grid {
+    grid-template-columns: 1fr;
+  }
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .import-row,
+  .form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .import-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #configuration-form {
+    padding: 0 20px;
+  }
+  th,
+  td {
+    padding: 13px;
+  }
+  .section-heading {
+    align-items: flex-start;
+  }
+  h1 {
+    letter-spacing: -1px;
+  }
+  .toolbar button {
+    font-size: 10px;
+    padding: 9px 11px;
+  }
+  .tabs {
+    gap: 25px;
+  }
+}

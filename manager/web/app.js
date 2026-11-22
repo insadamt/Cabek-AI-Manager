@@ -1,11 +1,9 @@
-/** Connect the local configuration and update UI to manager operations.
- * Depends on same-origin JSON APIs; inserts remote release text as text only.
- */
+/** Manage a complete real station; depends on same-origin JSON APIs and native service status. */
 const $ = (selector) => document.querySelector(selector);
-let latestStatus;
-let lastJobId;
+let lastStatus;
+let lastJob;
 let savedConfiguration;
-
+let updateSignature = "";
 async function api(path, method = "GET", body) {
   const response = await fetch(`/api/${path}`, {
     method,
@@ -17,90 +15,95 @@ async function api(path, method = "GET", body) {
     throw new Error(value.error || value.detail || "The request failed.");
   return value;
 }
-
 function notice(message, error = false) {
   $("#notice").textContent = message;
-  $("#notice").classList.toggle("error", error);
   $("#notice").hidden = !message;
+  $("#notice").classList.toggle("error", error);
 }
-
 async function perform(action) {
   try {
     await api(action, "POST", {});
     notice("Operation started. Follow its progress in Activity.");
     await refresh();
-    $("#activity").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     notice(error.message, true);
   }
 }
-
 function cell(row, text, className = "") {
-  const element = document.createElement("td");
-  element.textContent = text;
-  element.className = className;
-  row.append(element);
+  const td = document.createElement("td");
+  td.textContent = text;
+  td.className = className;
+  row.append(td);
 }
-
-function renderComponents(updates, installed) {
+function renderComponents(status) {
   const tbody = $("#components");
   tbody.replaceChildren();
-  for (const item of updates.components) {
+  for (const item of status.updates.components) {
     const row = document.createElement("tr");
     cell(row, item.name);
-    cell(row, installed[item.key]?.tag || "Not installed");
-    cell(row, item.latest?.tag || "Unavailable");
+    cell(row, status.installed[item.key]?.tag || "Not installed");
+    cell(row, item.latest?.tag || "Checking");
     cell(
       row,
-      item.error || (item.update_available ? "Update available" : "Up to date"),
-      item.error ? "bad" : item.update_available ? "warning" : "good",
+      item.error ||
+        (item.update_available
+          ? "Update available"
+          : status.installed[item.key]
+            ? "Up to date"
+            : "Included in setup"),
+      item.error ? "bad" : item.update_available ? "warning" : "",
     );
     tbody.append(row);
   }
-  if (!updates.components.length) {
-    const row = document.createElement("tr");
-    cell(row, "Check releases to see your ecosystem versions.");
-    row.firstChild.colSpan = 4;
-    tbody.append(row);
-  }
 }
-
 async function refresh() {
   try {
     const status = await api("status");
-    latestStatus = status;
+    lastStatus = status;
     const installed = Object.keys(status.installed).length > 0;
     const running = status.job?.status === "running";
-    const count = status.updates.components.filter(
+    const updates = status.updates.components.filter(
       (item) => item.update_available,
-    ).length;
-    $("#manager-version").textContent = `Manager ${status.version}`;
+    );
+    $("#version").textContent = `v${status.version}`;
+    $("#update-count").textContent = updates.length;
     $("#installation-state").textContent = installed
       ? "Installed"
       : "Ready for setup";
-    $("#update-count").textContent = count;
     $("#install").hidden = installed;
     $("#update-all").hidden =
-      !installed || (!count && !status.configuration_pending);
-    $("#update-all").textContent = count ? "Update All" : "Apply configuration";
+      !installed || (!updates.length && !status.configuration_pending);
+    $("#update-all").textContent = updates.length
+      ? "Update All"
+      : "Apply configuration";
     for (const id of ["start", "stop", "open-app"])
       $(`#${id}`).hidden = !installed;
     $("#open-app").href = status.application_url;
     $("#recover").hidden = !status.recovery_required;
     for (const button of document.querySelectorAll(
-      ".toolbar button, #configuration button",
+      ".toolbar button,#configuration button",
     ))
       button.disabled = running;
     if (status.recovery_required) {
       for (const id of ["install", "update-all", "start", "stop"])
         $(`#${id}`).disabled = true;
-      if (!running)
-        notice("An interrupted operation requires recovery. Use Recover interrupted operation before continuing.", true);
+      notice(
+        "An interrupted operation requires recovery before continuing.",
+        true,
+      );
     }
-    renderComponents(status.updates, status.installed);
+    renderComponents(status);
+    const signature = updates
+      .map((item) => `${item.key}:${item.latest?.tag}`)
+      .join(",");
+    if (installed && signature && signature !== updateSignature && !running)
+      notice(
+        `${updates.length} published update${updates.length === 1 ? "" : "s"} available. Click Update All when ready.`,
+      );
+    updateSignature = signature;
     const job = status.job;
     $("#job-status").textContent = job?.status || "Idle";
-    $("#job-title").textContent = job?.name || "Ready when you are";
+    $("#job-title").textContent = job?.name || "Activity";
     if (job) {
       $("#events").textContent =
         job.events
@@ -110,36 +113,34 @@ async function refresh() {
           )
           .join("\n") || "Preparing operation…";
       if (job.error) $("#events").textContent += `\n\n${job.error}`;
-      if (lastJobId !== `${job.id}:${job.status}`) {
+      if (lastJob !== `${job.id}:${job.status}`) {
         if (job.status === "failed" || job.status === "interrupted")
           notice(job.error, true);
         if (job.status === "completed") {
-          notice(
-            count
-              ? `${count} component update${count === 1 ? "" : "s"} available. Click Update All when ready.`
-              : "Operation completed.",
-          );
-          await refreshServices();
+          if (!updates.length) notice("Operation completed.");
+          refreshServices();
         }
-        lastJobId = `${job.id}:${job.status}`;
+        lastJob = `${job.id}:${job.status}`;
       }
     }
   } catch (error) {
-    notice(`Cannot reach the manager: ${error.message}`, true);
+    notice(`Cannot reach the Manager: ${error.message}`, true);
   }
 }
-
+let refreshingServices = false;
 async function refreshServices() {
+  if (refreshingServices) return;
+  refreshingServices = true;
   try {
     const result = await api("services");
-    $("#service-count").textContent = result.services.length;
     $("#running-count").textContent = result.services.filter(
       (item) => item.State === "running",
     ).length;
+    $("#runtime-label").textContent =
+      `of ${result.services.length || 9} application services`;
     $("#services").replaceChildren();
     for (const service of result.services) {
       const button = document.createElement("button");
-      button.className = "quiet";
       button.textContent = `${service.Service} · ${service.Health || service.State}`;
       button.addEventListener("click", async () => {
         try {
@@ -153,76 +154,71 @@ async function refreshServices() {
       });
       $("#services").append(button);
     }
-    if (result.error) notice(result.error, true);
+    $("#hardware").replaceChildren();
+    for (const check of result.hardware || []) {
+      const card = document.createElement("article");
+      card.className = "hardware-card";
+      const name = document.createElement("strong");
+      name.textContent = check.name;
+      const state = document.createElement("span");
+      state.className = `state ${check.state === "ready" ? "good" : "warning"}`;
+      state.textContent = check.state.replaceAll("_", " ");
+      const message = document.createElement("small");
+      message.textContent = check.message;
+      card.append(name, state, message);
+      $("#hardware").append(card);
+    }
   } catch (error) {
     notice(error.message, true);
+  } finally {
+    refreshingServices = false;
   }
 }
-
 async function loadConfiguration() {
-  const value = await api("configuration");
-  savedConfiguration = value;
-  const form = $("#configuration");
-  for (const [name, item] of Object.entries(value)) {
-    const input = form.elements.namedItem(name);
-    if (!input) continue;
-    if (input.type === "checkbox") input.checked = item;
-    else
-      input.value = Array.isArray(item)
-        ? item.join(name === "camera_channels" ? "," : "\n")
-        : item;
+  savedConfiguration = await api("configuration");
+  const form = $("#configuration-form");
+  for (const [name, value] of Object.entries(savedConfiguration)) {
+    const field = form.elements.namedItem(name);
+    if (!field) continue;
+    field.value = Array.isArray(value)
+      ? value.join(name === "dataset_paths" ? "\n" : ", ")
+      : value;
   }
-  for (const name of ["github_token", "nvr_password"]) {
-    if (value[`${name}_configured`])
-      form.elements.namedItem(name).placeholder =
-        "Configured · leave empty to keep";
-  }
-  $("#station-mode").textContent =
-    value.profile === "station" ? "Station" : "Demo";
-  toggleCameraFields();
+  for (const name of ["github_token", "nvr_password"])
+    form.elements.namedItem(name).placeholder = savedConfiguration[
+      `${name}_configured`
+    ]
+      ? "Saved · leave blank to retain"
+      : "Not configured";
 }
-
-function toggleCameraFields() {
-  $("#camera-fields").hidden =
-    $("#configuration").elements.profile.value !== "station";
-}
-
-$("#configuration").addEventListener("submit", async (event) => {
+$("#configuration-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = event.target;
-  const payload = Object.fromEntries(new FormData(form));
+  const form = event.currentTarget;
+  const value = Object.fromEntries(new FormData(form));
   for (const name of ["app_port", "api_port", "interior_switch_id"])
-    payload[name] = Number(payload[name]);
-  for (const name of ["lighting_enabled", "interior_enabled", "ocr_enabled"])
-    payload[name] = form.elements.namedItem(name).checked;
-  payload.camera_channels = payload.camera_channels
+    value[name] = Number(value[name]);
+  value.camera_channels = value.camera_channels
     .split(",")
-    .map((value) => Number(value.trim()))
-    .filter(Boolean);
-  payload.dataset_paths = payload.dataset_paths
+    .map((part) => Number(part.trim()));
+  value.dataset_paths = value.dataset_paths
     .split("\n")
-    .map((value) => value.trim())
+    .map((path) => path.trim())
     .filter(Boolean);
   try {
-    await api("configuration", "PUT", payload);
+    await api("configuration", "PUT", value);
     await loadConfiguration();
-    $("#configuration-status").textContent = "Configuration saved.";
-    notice(
-      "Configuration saved. Install the ecosystem or apply the new configuration.",
-    );
     await refresh();
+    notice(
+      "Configuration saved. Apply configuration to update installed service connections.",
+    );
   } catch (error) {
     notice(error.message, true);
   }
 });
-$("#configuration").elements.profile.addEventListener(
-  "change",
-  toggleCameraFields,
-);
 for (const action of [
-  "check-updates",
   "install",
   "update-all",
+  "check-updates",
   "start",
   "stop",
   "recover",
@@ -230,33 +226,43 @@ for (const action of [
   $(`#${action}`).addEventListener("click", () => perform(action));
 $("#refresh-services").addEventListener("click", refreshServices);
 $("#close-logs").addEventListener("click", () => $("#logs-dialog").close());
+$("#import-configuration").addEventListener("click", async () => {
+  try {
+    await api("configuration/import", "POST", {
+      directory: $("#import-directory").value.trim(),
+    });
+    await loadConfiguration();
+    await refresh();
+    notice("Existing station settings imported. Credentials stay private.");
+  } catch (error) {
+    notice(error.message, true);
+  }
+});
 $("#check-prerequisites").addEventListener("click", async () => {
-  const button = $("#check-prerequisites");
-  button.disabled = true;
   try {
     const result = await api("prerequisites");
     $("#prerequisites").replaceChildren();
     for (const check of result.checks) {
-      const paragraph = document.createElement("p");
-      paragraph.textContent = `${check.ok ? "✓" : "✕"} ${check.name}: ${check.detail}`;
-      paragraph.className = check.ok ? "good" : "bad";
-      $("#prerequisites").append(paragraph);
+      const row = document.createElement("div");
+      row.className = `check ${check.ok ? "good" : "bad"}`;
+      row.textContent = `${check.ok ? "✓" : "!"} ${check.name} — ${check.detail}`;
+      $("#prerequisites").append(row);
     }
-    $("#serial-devices").replaceChildren(
-      ...result.serial_devices.map((path) => {
-        const option = document.createElement("option");
-        option.value = path;
-        return option;
-      }),
-    );
+    $("#serial-devices").replaceChildren();
+    const auto = document.createElement("option");
+    auto.value = "auto";
+    $("#serial-devices").append(auto);
+    for (const device of result.serial_devices) {
+      const option = document.createElement("option");
+      option.value = device;
+      $("#serial-devices").append(option);
+    }
   } catch (error) {
     notice(error.message, true);
-  } finally {
-    button.disabled = false;
   }
 });
-loadConfiguration()
-  .then(refresh)
-  .then(refreshServices)
-  .catch((error) => notice(error.message, true));
-setInterval(refresh, 3000);
+loadConfiguration().catch((error) => notice(error.message, true));
+refresh();
+refreshServices();
+setInterval(refresh, 2500);
+setInterval(refreshServices, 15000);

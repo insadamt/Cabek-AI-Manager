@@ -17,8 +17,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from manager import VERSION
-from manager.backend import request_backend
+from manager.backend import resume
 from manager.configuration import Configuration, SiteConfig
+from manager.readiness import hardware_readiness
+from manager.serial_devices import needs_attachment, attach_serial
 from manager.jobs import Jobs
 from manager.orchestrator import Orchestrator
 from manager.storage import Store
@@ -50,10 +52,25 @@ def create_app(root=None, watch_releases=True):
                     except Exception:
                         pass
                 await asyncio.sleep(900)
+        async def poll_serial_device():
+            while True:
+                try:
+                    if (jobs.snapshot() or {}).get("status") != "running" and await asyncio.to_thread(needs_attachment, store):
+                        jobs.submit("Connect ESP32 device", lambda log: attach_serial(store, operations.create_runner(log), log))
+                except (OSError, ValueError):
+                    pass
+                await asyncio.sleep(5)
+        serial_watcher = asyncio.create_task(poll_serial_device()) if watch_releases else None
         watcher = asyncio.create_task(poll_releases()) if watch_releases else None
         try:
             yield
         finally:
+            if serial_watcher:
+                serial_watcher.cancel()
+                try:
+                    await serial_watcher
+                except asyncio.CancelledError:
+                    pass
             if watcher:
                 watcher.cancel()
                 try:
@@ -106,6 +123,12 @@ def create_app(root=None, watch_releases=True):
         configuration.save(dict(payload))
         return configuration.public()
 
+    @app.post("/api/configuration/import")
+    def import_configuration(payload: dict):
+        if (jobs.snapshot() or {}).get("status") == "running":
+            raise ValueError("Wait for the current operation before importing configuration.")
+        return configuration.import_existing(payload.get("directory") or None)
+
     @app.get("/api/status")
     def status():
         config = active_configuration()
@@ -118,7 +141,7 @@ def create_app(root=None, watch_releases=True):
     @app.get("/api/services")
     def services():
         try:
-            return {"services": service_status(store, operations.create_runner()), "error": None}
+            return {"services": service_status(store, operations.create_runner()), "hardware": hardware_readiness(active_configuration()) if store.read("installed", {}) else [], "error": None}
         except (RuntimeError, OSError) as error:
             return {"services": [], "error": str(error)}
 
@@ -159,29 +182,17 @@ def create_app(root=None, watch_releases=True):
             raise ValueError("Recover the interrupted operation first.")
         if not store.read("installed", {}):
             raise ValueError("Install the ecosystem first.")
-        def operation(log):
-            operations.create_runner(log).run(compose_command(store, "up", "-d", "--wait", "--wait-timeout", "180"), timeout=240)
-            request_backend(active_configuration(), configuration.ensure_credentials(), "maintenance", {"enabled": False})
-        return jobs.submit("Start services", operation)
+        return jobs.submit("Start services", operations.start)
 
     @app.post("/api/stop")
     def stop():
-        def operation(log):
-            config = active_configuration()
-            from manager.backend import drain
-            try:
-                drain(config, configuration.ensure_credentials(), log)
-                operations.create_runner(log).run(compose_command(store, "stop"), timeout=120)
-            except Exception:
-                request_backend(config, configuration.ensure_credentials(), "maintenance", {"enabled": False})
-                raise
-        return jobs.submit("Stop services", operation)
+        return jobs.submit("Stop services", operations.stop)
 
     @app.post("/api/resume")
-    def resume():
+    def resume_services():
         if store.read("transaction", None):
             raise ValueError("Recover the interrupted operation first.")
-        return request_backend(active_configuration(), configuration.ensure_credentials(), "maintenance", {"enabled": False})
+        return resume(active_configuration(), configuration.ensure_credentials())
 
     @app.post("/api/recover")
     def recover():

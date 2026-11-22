@@ -1,212 +1,171 @@
 <!doctype html>
-<!-- Local Cabek installation console; depends on the manager API and bundled assets. -->
+<!-- Configure the full Cabek station; depends on Manager's local JSON APIs and bundled assets. -->
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Cabek AI Manager</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23fa784b'/%3E%3Ctext x='8' y='24' font-size='24' font-family='sans-serif' font-weight='bold'%3EC%3C/text%3E%3C/svg%3E"
-    />
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <aside>
-      <a class="brand" href="/">C<span>AI</span></a>
-      <div class="wordmark">CABEK<span>AI MANAGER</span></div>
-      <nav aria-label="Main navigation">
-        <a href="#overview" class="active">◈ &nbsp; Overview</a
-        ><a href="#setup">⚙ &nbsp; Configuration</a
-        ><a href="#activity">↗ &nbsp; Activity</a>
-      </nav>
-      <footer>
-        <span class="status-dot"></span> Local station<br /><small
-          id="manager-version"
-          >Manager</small
-        >
-      </footer>
-    </aside>
+    <header class="topbar">
+      <a class="brand" href="/">CABEK <span>AI Manager</span></a>
+      <div>
+        <span class="local-dot"></span> Local station
+        <span id="version" class="muted"></span>
+      </div>
+    </header>
     <main>
-      <header>
+      <div class="page-heading">
         <div>
-          <p class="eyebrow">YOUR INSPECTION ECOSYSTEM</p>
-          <h1>Cabek AI Manager</h1>
-          <p class="muted">One station. Every service. Everything connected.</p>
+          <p class="eyebrow">STATION MANAGEMENT</p>
+          <h1>Your Cabek ecosystem.</h1>
+          <p class="muted">One setup. Every application connected.</p>
         </div>
         <a
           id="open-app"
-          class="button secondary"
-          href="#"
+          class="button primary"
+          hidden
           target="_blank"
           rel="noopener"
-          hidden
           >Open Cabek AI ↗</a
         >
-      </header>
+      </div>
       <div id="notice" role="status" hidden></div>
-      <section id="overview" aria-labelledby="overview-title">
+      <section class="summary-grid" aria-label="Station summary">
+        <article>
+          <span>Applications</span><strong id="application-count">7</strong
+          ><small>Complete ecosystem</small>
+        </article>
+        <article>
+          <span>Services running</span><strong id="running-count">—</strong
+          ><small id="runtime-label">Checking station</small>
+        </article>
+        <article>
+          <span>Published updates</span><strong id="update-count">—</strong
+          ><small>Stable releases only</small>
+        </article>
+      </section>
+      <nav class="tabs" aria-label="Sections">
+        <a href="#applications">Applications</a
+        ><a href="#configuration">Configuration</a
+        ><a href="#activity">Activity</a>
+      </nav>
+      <section id="applications">
         <div class="section-heading">
-          <h2 id="overview-title">Station overview</h2>
+          <div>
+            <h2>Applications</h2>
+            <p class="muted">
+              Every application is included and configured together.
+            </p>
+          </div>
           <span id="installation-state" class="badge">Not installed</span>
         </div>
-        <div class="metrics">
-          <article>
-            <span>Managed services</span><strong id="service-count">—</strong>
-          </article>
-          <article>
-            <span>Running</span><strong id="running-count">—</strong>
-          </article>
-          <article>
-            <span>Available updates</span><strong id="update-count">—</strong>
-          </article>
-          <article>
-            <span>Installation</span><strong id="station-mode">Demo</strong>
-          </article>
-        </div>
         <div class="toolbar">
-          <button id="check-updates" class="secondary">Check for updates</button
-          ><button id="update-all" hidden>Update All</button
-          ><button id="install">Install ecosystem</button
-          ><button id="start" class="secondary" hidden>Start services</button
-          ><button id="stop" class="quiet" hidden>Stop services</button
-          ><button id="recover" class="secondary" hidden>Recover interrupted operation</button
-          ><button id="refresh-services" class="quiet">Refresh status</button>
+          <button id="install" class="primary">Install ecosystem</button
+          ><button id="update-all" class="primary" hidden>Update All</button
+          ><button id="check-updates">Check for updates</button
+          ><button id="start" hidden>Start services</button
+          ><button id="stop" hidden>Stop services</button
+          ><button id="recover" hidden>Recover interrupted operation</button
+          ><button id="refresh-services">Refresh status</button>
         </div>
-        <div class="panel">
+        <div class="panel table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Component</th>
+                <th>Application</th>
                 <th>Installed</th>
                 <th>Latest published</th>
                 <th>Status</th>
               </tr>
             </thead>
-            <tbody id="components">
-              <tr>
-                <td colspan="4" class="empty">
-                  Check releases to see your ecosystem versions.
-                </td>
-              </tr>
-            </tbody>
+            <tbody id="components"></tbody>
           </table>
         </div>
+        <div class="section-heading hardware-heading">
+          <div>
+            <h3>Hardware connections</h3>
+            <p class="muted">
+              Application runtime and physical connections are checked
+              separately.
+            </p>
+          </div>
+        </div>
+        <div id="hardware" class="hardware-grid">
+          <p class="muted">Connection status appears after installation.</p>
+        </div>
         <div id="services" class="services"></div>
-        <details class="panel prerequisites">
-          <summary>Installation prerequisites</summary>
-          <button id="check-prerequisites" class="secondary">
-            Check this PC
-          </button>
-          <div id="prerequisites"></div>
-        </details>
       </section>
-      <section id="setup" aria-labelledby="setup-title">
+      <section id="configuration">
         <div class="section-heading">
           <div>
             <p class="eyebrow">CONFIGURE ONCE</p>
-            <h2 id="setup-title">Station configuration</h2>
-          </div>
-          <span class="muted"
-            >Connections and credentials are generated automatically.</span
-          >
-        </div>
-        <form id="configuration" class="panel setup-form">
-          <fieldset>
-            <legend>Installation</legend>
-            <div class="fields">
-              <label
-                >Station mode<select name="profile">
-                  <option value="demo">
-                    Demo · no physical cameras required
-                  </option>
-                  <option value="station">
-                    Inspection station · Tiandy NVR
-                  </option>
-                </select></label
-              ><label
-                >Cabek application port<input
-                  name="app_port"
-                  type="number"
-                  min="1024"
-                  max="65535"
-                  required /></label
-              ><label
-                >Local API port<input
-                  name="api_port"
-                  type="number"
-                  min="1024"
-                  max="65535"
-                  required
-              /></label>
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>GitHub access</legend>
+            <h2>Station configuration</h2>
             <p class="muted">
-              Use the authenticated GitHub CLI on this PC, or provide a token
-              with access to the private Cabek repositories.
+              Service addresses and internal credentials are connected
+              automatically.
             </p>
-            <label
-              >GitHub token<input
-                name="github_token"
-                type="password"
-                autocomplete="new-password"
-                placeholder="Leave empty to use gh authentication"
-            /></label>
-          </fieldset>
-          <fieldset id="camera-fields">
-            <legend>Tiandy cameras</legend>
+          </div>
+        </div>
+        <div class="panel import-row">
+          <div>
+            <strong>Existing station configuration</strong>
+            <p class="muted">
+              Import NVR and lighting settings from the existing Cabek folders.
+            </p>
+          </div>
+          <div class="import-actions">
+            <input
+              id="import-directory"
+              aria-label="Existing Cabek folder"
+              placeholder="Cabek folder, or leave blank to discover"
+            /><button id="import-configuration">Import settings</button>
+          </div>
+        </div>
+        <form id="configuration-form" class="panel">
+          <fieldset>
+            <legend>Camera station</legend>
             <div class="fields">
               <label
                 >NVR address<input
                   name="nvr_host"
-                  placeholder="192.168.1.3" /></label
+                  placeholder="NVR IP address or hostname" /></label
               ><label
-                >NVR username<input name="nvr_user" autocomplete="off" /></label
+                >NVR account<input
+                  name="nvr_user"
+                  autocomplete="username" /></label
               ><label
                 >NVR password<input
                   name="nvr_password"
                   type="password"
-                  autocomplete="new-password"
+                  autocomplete="new-password" /></label
+              ><label
+                >Camera channels<input
+                  name="camera_channels"
+                  placeholder="1, 2, 3, 4, …"
               /></label>
             </div>
-            <label
-              >NVR channels<input
-                name="camera_channels"
-                placeholder="1,2,4,5,6,7,8,10,11,12,13,14" /></label
-            ><small
-              >Capture requires channels 4, 13, 14, and 10. Confirm channels
-              against your NVR.</small
-            >
           </fieldset>
           <fieldset>
-            <legend>Hardware and optional services</legend>
-            <div class="toggles">
-              <label
-                ><input type="checkbox" name="lighting_enabled" /> ESP32
-                exterior lighting</label
-              ><label
-                ><input type="checkbox" name="interior_enabled" /> Shelly
-                interior lighting</label
-              ><label
-                ><input type="checkbox" name="ocr_enabled" /> E-Constat
-                OCR</label
-              >
-            </div>
+            <legend>Lighting</legend>
             <div class="fields">
               <label
-                >ESP32 USB device<input
+                >ESP32 serial device<input
                   name="serial_device"
                   list="serial-devices"
-                  placeholder="/dev/serial/by-id/…" /><datalist
-                  id="serial-devices"
-                ></datalist></label
+                  placeholder="auto"
+                /><datalist id="serial-devices">
+                  <option value="auto"></option></datalist
+                ><small
+                  >Auto detects one connected device. A disconnected device
+                  stays configured.</small
+                ></label
               ><label
                 >Shelly address<input
                   name="interior_url"
-                  placeholder="http://192.168.1.20" /></label
+                  placeholder="http://Shelly-address" /></label
               ><label
                 >Shelly switch ID<input
                   name="interior_switch_id"
@@ -216,47 +175,82 @@
             </div>
           </fieldset>
           <fieldset>
-            <legend>Pricing data</legend>
-            <p class="muted">
-              Canonical seeders and bundled datasets are installed
-              automatically. Add an optional normalized dataset path per line.
-            </p>
-            <label
-              >Additional datasets<textarea
+            <legend>Installation</legend>
+            <div class="fields">
+              <label
+                >Application port<input
+                  name="app_port"
+                  type="number"
+                  min="1024"
+                  max="65535" /></label
+              ><label
+                >API port<input
+                  name="api_port"
+                  type="number"
+                  min="1024"
+                  max="65535" /></label
+              ><label
+                >Station data directory<input
+                  name="data_directory"
+                  placeholder="Automatic private installation storage"
+                /><small
+                  >Choose before installation; existing station data is
+                  preserved during updates.</small
+                ></label
+              ><label
+                >GitHub token<input
+                  name="github_token"
+                  type="password"
+                  autocomplete="new-password"
+                /><small
+                  >An authenticated GitHub CLI can also supply repository
+                  access.</small
+                ></label
+              >
+            </div>
+            <label class="dataset-label"
+              >Additional pricing datasets<textarea
                 name="dataset_paths"
                 rows="3"
-                placeholder="/absolute/path/to/normalized-data.zip"
+                placeholder="One absolute JSON, ZIP, or directory path per line"
               ></textarea>
             </label>
           </fieldset>
           <div class="form-footer">
-            <span id="configuration-status" class="muted"
-              >Your settings stay on this PC.</span
-            ><button type="submit">Save configuration</button>
+            <p class="muted">
+              Saved credentials are retained when password fields are left
+              empty.
+            </p>
+            <button type="submit" class="primary">Save configuration</button>
           </div>
         </form>
+        <details class="panel prerequisites">
+          <summary>Installation prerequisites</summary>
+          <button id="check-prerequisites">Check this PC</button>
+          <div id="prerequisites"></div>
+        </details>
       </section>
-      <section id="activity" aria-labelledby="activity-title">
+      <section id="activity">
         <div class="section-heading">
-          <h2 id="activity-title">Activity</h2>
+          <div>
+            <p class="eyebrow">INSTALLATION & UPDATES</p>
+            <h2 id="job-title">Activity</h2>
+          </div>
           <span id="job-status" class="badge">Idle</span>
         </div>
-        <div class="panel">
-          <div id="job-title" class="job-title">Ready when you are</div>
-          <pre id="events" aria-live="polite">
-Installation and update progress will appear here.</pre>
-        </div>
+        <pre id="events" class="panel">
+Operation progress will appear here.</pre>
       </section>
-      <dialog id="logs-dialog">
-        <div class="section-heading">
-          <h2 id="logs-title">Service logs</h2>
-          <button id="close-logs" class="quiet">Close</button>
-        </div>
-        <pre id="logs-text"></pre>
-      </dialog>
-      <p class="footnote">
-        Cabek AI Manager · Ubuntu / Linux · Published releases only
-      </p>
+      <footer class="page-footer">
+        Cabek AI Manager · Ubuntu/Linux · One station
+      </footer>
     </main>
+    <dialog id="logs-dialog">
+      <div class="section-heading">
+        <h2 id="logs-title">Service logs</h2>
+        <button id="close-logs">Close</button>
+      </div>
+      <pre id="logs-text"></pre>
+    </dialog>
   </body>
 </html>

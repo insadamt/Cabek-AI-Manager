@@ -19,7 +19,9 @@ def revision(tag="v1.0.0", sha="a" * 40):
 
 def test_published_updates_are_compared_per_component(tmp_path, monkeypatch):
     store = Store(tmp_path)
-    orchestrator = Orchestrator(store, Configuration(store))
+    configuration = Configuration(store)
+    configuration.save({"nvr_host":"192.0.2.1","nvr_password":"test-password","interior_url":"http://192.0.2.2"})
+    orchestrator = Orchestrator(store, configuration)
     store.write("installed", {"backend": revision(), "frontend": revision("v2.0.0")})
     monkeypatch.setattr(GitHub, "latest", lambda self, repo: revision("v1.1.0", "b" * 40))
     result = orchestrator.check_updates()
@@ -39,7 +41,9 @@ def test_retagged_version_is_not_silently_installed(tmp_path, monkeypatch):
 
 def test_missing_release_stops_before_source_download_or_docker(tmp_path, monkeypatch):
     store = Store(tmp_path)
-    orchestrator = Orchestrator(store, Configuration(store))
+    configuration = Configuration(store)
+    configuration.save({"nvr_host":"192.0.2.1","nvr_password":"test-password","interior_url":"http://192.0.2.2"})
+    orchestrator = Orchestrator(store, configuration)
     monkeypatch.setattr("manager.orchestrator.preflight", lambda *args: {"ready": True})
     monkeypatch.setattr("manager.orchestrator.require_free_ports", lambda *args: None)
     def missing(*args):
@@ -54,6 +58,7 @@ def test_missing_release_stops_before_source_download_or_docker(tmp_path, monkey
 def test_failed_build_does_not_enter_maintenance_or_replace_installed_state(tmp_path, monkeypatch):
     store = Store(tmp_path)
     configuration = Configuration(store)
+    configuration.save({"nvr_host":"192.0.2.1","nvr_password":"test-password","interior_url":"http://192.0.2.2"})
     orchestrator = Orchestrator(store, configuration)
     original = {key: revision() for key in ("backend", "frontend", "autoestimate", "ocr")}
     store.write("installed", original)
@@ -74,3 +79,28 @@ def test_failed_build_does_not_enter_maintenance_or_replace_installed_state(tmp_
         orchestrator.update_all(lambda message: None)
     assert store.read("compose") == {"name": "old-installation"}
     assert store.read("installed") == original
+
+
+def test_failed_admission_drain_leaves_running_applications_untouched(tmp_path, monkeypatch):
+    store = Store(tmp_path)
+    configuration = Configuration(store)
+    configuration.save({'nvr_host':'192.0.2.1','nvr_password':'test-password','interior_url':'http://192.0.2.2'})
+    original = {key:revision() for key in ('manager','backend','frontend','cameras','lighting','ocr','autoestimate')}
+    store.write('installed', original)
+    store.write('compose', {'name':'cabek-ai-manager','services':{'gateway':{}}})
+    commands=[]
+    monkeypatch.setattr('manager.orchestrator.preflight',lambda *args:{'ready':True})
+    monkeypatch.setattr(GitHub,'latest',lambda *args:revision('v1.1.0','b'*40))
+    monkeypatch.setattr(GitHub,'download',lambda self,repository,sha,destination:destination.mkdir(parents=True))
+    monkeypatch.setattr('manager.commands.CommandRunner.run',lambda self,args,**kwargs:commands.append(args) or '')
+    monkeypatch.setattr('manager.orchestrator.prepare_manager',lambda *args:None)
+    def blocked(*args):
+        raise ValueError('Accepted request still active')
+    monkeypatch.setattr('manager.orchestrator.drain',blocked)
+    resumed=[]
+    monkeypatch.setattr('manager.orchestrator.resume',lambda *args:resumed.append(True))
+    with pytest.raises(ValueError,match='Accepted request'):
+        Orchestrator(store,configuration).update_all(lambda message:None)
+    assert not any('stop' in command for command in commands)
+    assert store.read('installed')==original
+    assert resumed==[True]

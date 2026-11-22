@@ -1,0 +1,15 @@
+# Build Manager runtime code without private state or assistant tooling.
+# Depends on the gateway recipe in deploy/gateway.
+.git
+.local
+.venv
+.pytest_cache
+**/__pycache__
+*.pyc
+.env*
+.agents
+.codex
+.claude
+.cursor
+.ai
+.aws

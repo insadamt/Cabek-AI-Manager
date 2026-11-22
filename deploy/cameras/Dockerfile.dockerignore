@@ -1,0 +1,30 @@
+# Exclude workstation secrets, assistant tooling, and generated artifacts.
+# Depends on the Python/Node repository runtime layout.
+.git
+.env
+.env.*
+!.env.example
+!.env.production.example
+.venv
+node_modules
+dist
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.local
+.agents
+.codex
+.aws
+.claude
+.cursor
+.ai
+.instructions.md
+.instruction.md
+.instrcutions.md
+test-results
+data/dossiers
+output
+.pio
+.rollback
+.evidence

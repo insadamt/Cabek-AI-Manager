@@ -1,20 +1,18 @@
-"""Render one private Compose project from site settings and published revisions.
+"""Build the entire native ecosystem with Manager-owned deployment recipes.
 
-Depends on repository Dockerfiles and persistent host directories. Internal DNS
-addresses and shared credentials are generated here instead of edited per repo.
+Depends on exact release archives, a shared loopback namespace, and private data.
+Application source trees are read-only inputs; Docker/configuration files live here.
 """
-from pathlib import Path
+import hashlib
+import json
 import os
-
-
-def health(url):
-    return {"test": ["CMD", "python", "-c", f"import urllib.request; urllib.request.urlopen('{url}',timeout=3)"],
-            "interval": "10s", "timeout": "5s", "retries": 12, "start_period": "30s"}
+from pathlib import Path
+from manager.configuration import data_root
 
 
 def escape_compose_literals(value):
     if isinstance(value, str):
-        return value.replace("$", "$$")
+        return value.replace('$', '$$')
     if isinstance(value, list):
         return [escape_compose_literals(item) for item in value]
     if isinstance(value, dict):
@@ -22,110 +20,125 @@ def escape_compose_literals(value):
     return value
 
 
-def prepare_runtime_directories(root):
-    for name in ("dossiers", "runtime", "mock-photos", "ocr-output", "ocr-models"):
-        (Path(root) / "data" / name).mkdir(parents=True, exist_ok=True)
+def selected_serial_device(config):
+    if config.serial_device not in ('', 'auto'):
+        path = Path(config.serial_device)
+        return path if path.exists() and path.is_char_device() else None
+    devices = sorted(Path('/dev/serial/by-id').glob('*'))
+    return devices[0] if len(devices) == 1 else None
+
+
+def prepare_runtime_directories(root, config=None):
+    data = data_root(root, config) if config else Path(root) / 'data'
+    for name in ('dossiers', 'runtime', 'ocr-output', 'ocr-models'):
+        (data / name).mkdir(parents=True, exist_ok=True)
+
+
+def python_health(code):
+    return {'test': ['CMD', 'python', '-c', code], 'interval': '10s', 'timeout': '5s', 'retries': 18, 'start_period': '30s'}
 
 
 def render_compose(root, config, credentials, revisions):
     root = Path(root).resolve()
-    data = root / "data"
-    project = "cabek-ai-manager"
+    data = data_root(root, config)
+    manager_source = root / 'sources/manager' / revisions['manager']['sha']
+    recipes = manager_source / 'deploy'
+    digest = hashlib.sha256()
+    for file in sorted(recipes.rglob('*')):
+        if file.is_file() and '__pycache__' not in file.parts:
+            digest.update(str(file.relative_to(recipes)).encode())
+            digest.update(file.read_bytes())
+    recipe_hash = digest.hexdigest()[:12]
 
     def source(key):
-        return str(root / "sources" / key / revisions[key]["sha"])
+        return str(root / 'sources' / key / revisions[key]['sha'])
 
     def application(key, target=None):
-        build = {"context": source(key)}
+        context = source(key) if key != 'gateway' else str(manager_source)
+        recipe = key if key != 'autoestimate' else 'autoestimate'
+        build = {'context': context, 'dockerfile': str(recipes / recipe / 'Dockerfile'),
+                 'additional_contexts': {'deployment': str(recipes)}}
         if target:
-            build["target"] = target
-        service = {"build": build, "image": f"cabek-managed-{key}:{revisions[key]['sha'][:12]}" + ("-" + target if target else ""),
-                   "restart": "unless-stopped"}
-        if key in ("backend", "cameras", "lighting", "ocr"):
-            # Host-owned files remain readable and recoverable by the manager after a container exits.
-            service["user"] = f"{os.getuid()}:{os.getgid()}"
+            build['target'] = target
+        parameters = {'app_port': config.app_port} if key == 'frontend' else {}
+        if parameters:
+            build['args'] = {'VITE_API_BASE_URL': f'http://localhost:{config.app_port}'}
+        identity = hashlib.sha256(json.dumps([recipe_hash, target, parameters], sort_keys=True).encode()).hexdigest()[:12]
+        revision = revisions['manager' if key == 'gateway' else key]['sha'][:12]
+        service = {'build': build, 'image': f'cabek-managed-{key}:{revision}-{identity}',
+                   'pull_policy': 'never', 'restart': 'unless-stopped'}
+        if key in ('backend', 'gateway', 'cameras', 'lighting', 'ocr'):
+            service['user'] = f'{os.getuid()}:{os.getgid()}'
+        if key in ('backend', 'frontend', 'cameras', 'lighting', 'ocr'):
+            service['network_mode'] = 'service:gateway'
         return service
 
-    database = {
-        "image": "mariadb:11.8", "restart": "unless-stopped",
-        "environment": {"MARIADB_DATABASE": "cabek_autoestimate", "MARIADB_USER": "cabek",
-                        "MARIADB_PASSWORD": credentials["db_password"],
-                        "MARIADB_ROOT_PASSWORD": credentials["db_root_password"]},
-        "volumes": ["pricing_database:/var/lib/mysql"],
-        "healthcheck": {"test": ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"],
-                        "interval": "5s", "timeout": "5s", "retries": 30, "start_period": "30s"},
-    }
-    pricing = application("autoestimate", "app")
-    pricing["environment"] = {
-        "APP_NAME": "Cabek AutoEstimate", "APP_ENV": "production", "APP_DEBUG": "false",
-        "APP_KEY": credentials["app_key"], "APP_URL": "http://pricing-web",
-        "LOG_CHANNEL": "stderr", "DB_CONNECTION": "mariadb", "DB_HOST": "database",
-        "DB_PORT": "3306", "DB_DATABASE": "cabek_autoestimate", "DB_USERNAME": "cabek",
-        "DB_PASSWORD": credentials["db_password"], "SESSION_DRIVER": "database",
-        "CACHE_STORE": "database", "QUEUE_CONNECTION": "database", "AUTOESTIMATE_API_RATE_LIMIT": "600",
-    }
-    pricing["depends_on"] = {"database": {"condition": "service_healthy"}}
-    pricing["volumes"] = [f"{source('autoestimate')}/data:/imports/bundled:ro"]
-    for index, path in enumerate(config.dataset_paths):
-        pricing["volumes"].append(f"{path}:/imports/custom-{index}:ro")
-    pricing_web = application("autoestimate", "nginx")
-    # The existing AutoEstimate Nginx configuration uses the upstream name app.
-    pricing["networks"] = {"default": {"aliases": ["app"]}}
-    pricing_web["depends_on"] = ["pricing"]
-    pricing_web["healthcheck"] = {"test": ["CMD", "wget", "-qO-", "http://127.0.0.1/up"],
-                                  "interval": "10s", "timeout": "5s", "retries": 12}
-    backend = application("backend")
-    backend["environment"] = {
-        "CABEK_DOSSIERS_DIR": "/data/dossiers", "CABEK_RUNTIME_DIR": "/data/runtime",
-        "CABEK_MODELS_DIR": "/app/models", "CABEK_TUNNEL_MODE": "tiandy" if config.profile == "station" else "mock",
-        "CABEK_MOCK_PHOTOS_DIR": "/data/mock-photos", "CABEK_MANAGER_KEY": credentials["manager_key"],
-        "AUTOESTIMATE_BASE_URL": "http://pricing-web/api/v1", "AUTOESTIMATE_TOKEN": credentials["autoestimate_token"],
-        "CABEK_TIANDY_API_URL": "http://cameras:8001", "CABEK_TIANDY_API_KEY": credentials["camera_key"],
-        "CABEK_LIGHTS_ENABLED": "1" if config.lighting_enabled else "0",
-        "CABEK_LIGHTS_API_URL": "http://lighting:8001",
-        "CABEK_INTERNAL_LIGHTS_ENABLED": "true" if config.interior_enabled else "false",
-        "CABEK_INTERNAL_LIGHTS_URL": config.interior_url or "http://127.0.0.1",
-        "CABEK_INTERNAL_LIGHTS_SWITCH_ID": str(config.interior_switch_id),
-        "CABEK_ECONSTAT_API_URL": "http://ocr:8002",
-        "CABEK_ECONSTAT_API_TOKEN": credentials["ocr_token"] if config.ocr_enabled else "",
-        "OMP_NUM_THREADS": "4", "OPENBLAS_NUM_THREADS": "4",
-        "TORCH_HOME": "/tmp/torch",
-    }
-    backend["volumes"] = [f"{data}/{name}:/data/{name}" for name in ("dossiers", "runtime", "mock-photos")]
-    backend["ports"] = [f"127.0.0.1:{config.api_port}:8000"]
-    backend["healthcheck"] = health("http://127.0.0.1:8000/health")
-    backend["depends_on"] = {"pricing-web": {"condition": "service_healthy"}}
-    frontend = application("frontend")
-    frontend["environment"] = {"CABEK_BACKEND_URL": "http://backend:8000", "CABEK_MANAGER_KEY": credentials["manager_key"]}
-    frontend["ports"] = [f"127.0.0.1:{config.app_port}:80"]
-    frontend["depends_on"] = {"backend": {"condition": "service_healthy"}}
-    frontend["healthcheck"] = {"test": ["CMD", "wget", "-qO-", "http://127.0.0.1/health"],
-                               "interval": "10s", "timeout": "5s", "retries": 12}
-    services = {"database": database, "pricing": pricing, "pricing-web": pricing_web,
-                "backend": backend, "frontend": frontend}
-    if config.profile == "station":
-        cameras = application("cameras")
-        cameras["environment"] = {"API_HOST": "0.0.0.0", "API_PORT": "8001", "NVR_IP": config.nvr_host,
-                                  "RTSP_USER": config.nvr_user, "RTSP_PASSWORD": config.nvr_password,
-                                  "CAMERA_CHANNELS": ",".join(map(str, config.camera_channels)),
-                                  "CAMERA_API_KEY": credentials["camera_key"]}
-        cameras["healthcheck"] = health("http://127.0.0.1:8001/health")
-        services["cameras"] = cameras
-        backend["depends_on"]["cameras"] = {"condition": "service_healthy"}
-    if config.lighting_enabled:
-        lights = application("lighting")
-        lights["environment"] = {"CABEK_LIGHTS_PORT": "/dev/cabek-esp32"}
-        lights["devices"] = [f"{Path(config.serial_device).resolve()}:/dev/cabek-esp32"]
-        lights["group_add"] = [str(Path(config.serial_device).stat().st_gid)]
-        lights["healthcheck"] = health("http://127.0.0.1:8001/health")
-        services["lighting"] = lights
-        backend["depends_on"]["lighting"] = {"condition": "service_healthy"}
-    if config.ocr_enabled:
-        ocr = application("ocr")
-        ocr["environment"] = {"ECONSTAT_API_TOKEN": credentials["ocr_token"], "EASYOCR_MODULE_PATH": "/models",
-                              "ECONSTAT_OUTPUT_DIR": "/output", "OMP_NUM_THREADS": "4", "TORCH_HOME": "/tmp/torch"}
-        ocr["volumes"] = [f"{data}/ocr-models:/models", f"{data}/ocr-output:/output"]
-        ocr["healthcheck"] = health("http://127.0.0.1:8002/health")
-        services["ocr"] = ocr
-    # Compose interpolates strings even in JSON; passwords and paths must retain literal dollar signs.
-    return escape_compose_literals({"name": project, "services": services, "volumes": {"pricing_database": {}}, "networks": {"default": {}}})
+    gateway = application('gateway')
+    gateway['ports'] = [f'127.0.0.1:{config.app_port}:80', f'127.0.0.1:{config.api_port}:8008']
+    gateway['environment'] = {'CABEK_GATEWAY_KEY': credentials['gateway_key'],
+                              'CABEK_GATEWAY_MARKER': '/state/gateway-closed'}
+    gateway['volumes'] = [f'{data}/runtime:/state']
+    gateway['healthcheck'] = python_health("import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/_manager/health',timeout=3)")
+    database = {'image': 'mariadb:11.8', 'restart': 'unless-stopped',
+                'environment': {'MARIADB_DATABASE': 'cabek_autoestimate', 'MARIADB_USER': 'cabek',
+                                'MARIADB_PASSWORD': credentials['db_password'], 'MARIADB_ROOT_PASSWORD': credentials['db_root_password']},
+                'volumes': ['pricing_database:/var/lib/mysql'],
+                'healthcheck': {'test': ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized'],
+                                'interval': '5s', 'timeout': '5s', 'retries': 30, 'start_period': '30s'}}
+    pricing = application('autoestimate', 'app')
+    pricing['environment'] = {'APP_NAME': 'Cabek AutoEstimate', 'APP_ENV': 'production', 'APP_DEBUG': 'false',
+        'APP_KEY': credentials['app_key'], 'APP_URL': 'http://pricing-web', 'LOG_CHANNEL': 'stderr',
+        'DB_CONNECTION': 'mariadb', 'DB_HOST': 'database', 'DB_PORT': '3306', 'DB_DATABASE': 'cabek_autoestimate',
+        'DB_USERNAME': 'cabek', 'DB_PASSWORD': credentials['db_password'], 'SESSION_DRIVER': 'database',
+        'CACHE_STORE': 'database', 'QUEUE_CONNECTION': 'database'}
+    pricing['networks'] = {'default': {'aliases': ['app']}}
+    pricing['depends_on'] = {'database': {'condition': 'service_healthy'}}
+    pricing['volumes'] = [f"{source('autoestimate')}/data:/imports/bundled:ro", f'{recipes}/autoestimate:/manager:ro']
+    pricing['volumes'] += [f'{path}:/imports/custom-{index}:ro' for index, path in enumerate(config.dataset_paths)]
+    pricing_web = application('autoestimate', 'nginx')
+    pricing_web['depends_on'] = ['pricing']
+    pricing_web['healthcheck'] = {'test': ['CMD', 'wget', '-qO-', 'http://127.0.0.1/up'], 'interval': '10s', 'timeout': '5s', 'retries': 18}
+    cameras = application('cameras')
+    cameras['environment'] = {'API_HOST': '127.0.0.1', 'API_PORT': '8001', 'NVR_IP': config.nvr_host,
+        'RTSP_USER': config.nvr_user, 'RTSP_PASSWORD': config.nvr_password, 'CAMERA_API_KEY': credentials['camera_key'],
+        'CAMERA_CHANNELS': ','.join(map(str, config.camera_channels))}
+    cameras['healthcheck'] = python_health("import os,urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8001/api/cameras',headers={'X-API-Key':os.environ['CAMERA_API_KEY']}),timeout=3)")
+    lights = application('lighting')
+    lights['environment'] = {'CABEK_LIGHTS_PORT': '/dev/cabek-esp32'}
+    device = selected_serial_device(config)
+    if device:
+        lights['devices'] = [f'{device.resolve()}:/dev/cabek-esp32']
+        lights['group_add'] = [str(device.stat().st_gid)]
+    lights['healthcheck'] = python_health("import socket; socket.create_connection(('127.0.0.1',9001),3).close()")
+    ocr = application('ocr')
+    ocr['environment'] = {'ECONSTAT_API_TOKEN': credentials['ocr_token'], 'EASYOCR_MODULE_PATH': '/models',
+                          'OMP_NUM_THREADS': '4', 'TORCH_HOME': '/tmp/torch'}
+    ocr['volumes'] = [f'{data}/ocr-models:/models', f'{data}/ocr-output:/app/output']
+    ocr['healthcheck'] = python_health("import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health',timeout=3)")
+    backend = application('backend')
+    backend['environment'] = {'CABEK_DOSSIERS_DIR': '/data/dossiers', 'CABEK_RUNTIME_DIR': '/data/runtime',
+        'CABEK_MODELS_DIR': '/app/models', 'CABEK_TUNNEL_MODE': 'tiandy',
+        'AUTOESTIMATE_BASE_URL': 'http://pricing-web/api/v1', 'AUTOESTIMATE_TOKEN': credentials.get('autoestimate_token', ''),
+        'CABEK_TIANDY_API_URL': 'http://127.0.0.1:8001', 'CABEK_TIANDY_API_KEY': credentials['camera_key'],
+        'CABEK_LIGHTS_ENABLED': '1', 'CABEK_LIGHTS_API_URL': 'http://127.0.0.1:9001',
+        'CABEK_INTERNAL_LIGHTS_ENABLED': 'true', 'CABEK_INTERNAL_LIGHTS_URL': config.interior_url,
+        'CABEK_INTERNAL_LIGHTS_SWITCH_ID': str(config.interior_switch_id),
+        'CABEK_ECONSTAT_API_URL': 'http://127.0.0.1:8002', 'CABEK_ECONSTAT_API_TOKEN': credentials['ocr_token'],
+        'OMP_NUM_THREADS': '4', 'OPENBLAS_NUM_THREADS': '4', 'TORCH_HOME': '/tmp/torch'}
+    backend['volumes'] = [f'{data}/{name}:/data/{name}' for name in ('dossiers', 'runtime')]
+    backend['depends_on'] = {name: {'condition': 'service_healthy'} for name in ('gateway', 'cameras', 'lighting', 'ocr', 'pricing-web')}
+    backend['healthcheck'] = python_health("import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/settings/operation',timeout=3)")
+    frontend = application('frontend')
+    frontend['environment'] = {'CABEK_APPLICATION_PORT': str(config.app_port)}
+    frontend['healthcheck'] = {'test': ['CMD', 'wget', '-qO-', 'http://127.0.0.1/health'], 'interval': '10s', 'timeout': '5s', 'retries': 18}
+    services = {'gateway': gateway, 'database': database, 'pricing': pricing, 'pricing-web': pricing_web,
+                'cameras': cameras, 'lighting': lights, 'ocr': ocr, 'backend': backend, 'frontend': frontend}
+    # Retain native tuning while Manager resolves connection keys, paths and real station mode.
+    protected = {'CABEK_MOCK_PHOTOS_DIR', 'CABEK_TUNNEL_MODE', 'CABEK_MANAGER_KEY', 'CABEK_RUNTIME_DIR',
+                 'CABEK_DOSSIERS_DIR', 'CABEK_MODELS_DIR', 'API_HOST', 'API_PORT', 'ECONSTAT_OUTPUT_DIR'}
+    for component, values in config.native_environment.items():
+        if component in services:
+            managed = services[component].get('environment', {})
+            services[component]['environment'] = {**{key: value for key, value in values.items() if key not in protected}, **managed}
+    return escape_compose_literals({'name': 'cabek-ai-manager', 'services': services,
+                                   'volumes': {'pricing_database': {}}, 'networks': {'default': {}}})

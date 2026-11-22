@@ -1,0 +1,6 @@
+# Add real inference and reports to the API environment; CPU torch is installed by Docker.
+-r requirements-api.txt
+ultralytics>=8.3,<9
+numpy>=1.26,<3
+reportlab>=4,<6
+opencv-python-headless>=4.9

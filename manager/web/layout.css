@@ -1,0 +1,150 @@
+/* Cabek Manager appearance; depends on shared theme tokens and semantic station markup. */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 31px;
+}
+.summary-grid article {
+  padding: 22px 25px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.summary-grid span {
+  font-size: 11px;
+  color: #737373;
+}
+.summary-grid strong {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -1px;
+}
+.summary-grid small {
+  font-size: 10px;
+  color: #969696;
+}
+.tabs {
+  display: flex;
+  gap: 30px;
+  border-bottom: 1px solid #dfdfdf;
+  margin-bottom: 35px;
+  padding-bottom: 13px;
+}
+.tabs a {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+.tabs a:first-child {
+  color: #222;
+}
+.section-heading {
+  margin-bottom: 18px;
+}
+.section-heading p {
+  margin-top: 5px;
+}
+.badge {
+  padding: 7px 11px;
+  border: 1px solid #e2e2e2;
+  border-radius: 20px;
+  font-size: 10px;
+  color: #666;
+  background: #fff;
+  white-space: nowrap;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 17px;
+}
+.panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+.table-wrap {
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+th {
+  font-size: 10px;
+  font-weight: 600;
+  color: #888;
+  padding: 15px 23px;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 17px 23px;
+  border-bottom: 1px solid #f0f0f0;
+}
+td:first-child {
+  font-weight: 650;
+}
+tr:last-child td {
+  border: 0;
+}
+.good {
+  color: #51705b;
+}
+.warning {
+  color: #98712d;
+}
+.bad {
+  color: #a23d3d;
+}
+.hardware-heading {
+  margin-top: 29px;
+}
+.hardware-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.hardware-card {
+  padding: 18px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+}
+.hardware-card strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 7px;
+}
+.hardware-card small {
+  font-size: 11px;
+  color: #777;
+  line-height: 1.7;
+  display: block;
+}
+.hardware-card .state {
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: block;
+}
+.services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 15px;
+}
+.services button {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 10px;
+  color: #6c6c6c;
+  background: transparent;
+}

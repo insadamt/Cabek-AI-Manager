@@ -1,0 +1,22 @@
+# Preserve native API paths and stream behavior through the Manager gateway.
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  client_max_body_size 0;
+  location = /health { access_log off; return 200 'ok'; }
+  location ^~ /_manager/ { return 404; }
+  location /api/ {
+    proxy_pass http://127.0.0.1:8008;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 3600s;
+  }
+  location / {
+    if ($host != localhost) { return 308 http://localhost:${CABEK_APPLICATION_PORT}$request_uri; }
+    try_files $uri $uri/ /index.html;
+  }
+}
