@@ -1,3 +1,3 @@
 """Manage the single-PC Cabek ecosystem; depends on GitHub releases and Docker Compose."""
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"

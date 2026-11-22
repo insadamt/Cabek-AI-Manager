@@ -16,6 +16,7 @@ from manager.native_idle import idle_station
 from manager.provisioning import provision_pricing, configure_real_station
 from manager.releases import GitHub, version_tuple
 from manager.self_update import prepare_manager
+from manager.deployment_migration import needs_private_storage
 from manager.system import compose_command, preflight, require_free_ports
 
 
@@ -106,7 +107,7 @@ class Orchestrator:
         if failures:
             raise ValueError('\n'.join(failures))
         targets = {item['key']: item['latest'] if item['update_available'] else item['installed'] for item in updates['components']}
-        if targets == previous and self.store.read('installed-configuration') == config.model_dump():
+        if targets == previous and self.store.read('installed-configuration') == config.model_dump() and not needs_private_storage(self.store):
             log('Every application is at its latest published stable release.')
             return
         github = GitHub(runner, config.github_token)

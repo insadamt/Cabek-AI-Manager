@@ -1,6 +1,6 @@
 # Private demo dossiers, imports, and diagnostics
 
-This consolidated technical report explains the new native private administration, safe dossier imports, Manager deployment changes, validation evidence, and operating limits. It depends on Backend v0.2.0, Frontend v0.2.0, Manager v0.3.0, the existing native dossier/result schemas, Docker Compose, and private local storage. It supplements the deployment architecture document; no application source is patched during builds.
+This consolidated technical report explains the new native private administration, safe dossier imports, Manager deployment changes, validation evidence, and operating limits. It depends on Backend v0.2.1, Frontend v0.2.0, Manager v0.3.1, the existing native dossier/result schemas, Docker Compose, and private local storage. It supplements the deployment architecture document; no application source is patched during builds.
 
 ## Components and changed files
 
@@ -77,9 +77,9 @@ Manager reports process health, actual camera image availability, NVR route/RTSP
 
 ## Release/deployment sequence
 
-1. Commit Backend changes coherently and publish stable **v0.2.0** on its existing `dev` branch.
+1. Commit Backend changes coherently and publish stable **v0.2.1** on its existing `dev` branch.
 2. Commit Frontend changes coherently and publish stable **v0.2.0** on `master`.
-3. Commit Manager deployment, tests and this report coherently and publish stable **v0.3.0** on `main` after checks pass.
+3. Commit Manager deployment, tests and this report coherently and publish stable **v0.3.1** on `main` after checks pass.
 4. Use **Check for updates**, then **Update All**. For the one-time upgrade from the older renderer, wait for the new Manager to restart, then choose **Apply configuration** when shown to add the private mounts. New installations use the correct mounts immediately. There is no automatic disruptive startup migration. Manager downloads published stable archives; branch commits, plain tags, drafts and prereleases are not deployment inputs.
 5. Initialize the local private password, validate/import the four requested dossiers, and prepare owner-selected templates. Keep demo operation disabled after acceptance.
 
@@ -87,7 +87,7 @@ No tags are rewritten. Existing application data and unrelated local projects re
 
 ## Verification and manual checklist
 
-Recorded checks before publication: Backend **422 passed**, Frontend **779 passed / 106 files**, Manager **67 passed** plus **6 Node UI state tests**; including read-only one-time mount detection. Automated evidence includes full Backend, Frontend and Manager regression suites, private API tests for all three categories, password/session/CSRF/rate-limit boundaries, template privacy, conflict/concurrency and rollback, original/annotation validation, independent cloning, native financial/result/PDF compatibility, E-Constat preview, verification finalization, unmatched blocking, native production resumption and backup/restore of private assets.
+Recorded checks before publication: Backend **425 passed**, Frontend **779 passed / 106 files**, Manager **68 passed** plus **6 Node UI state tests**; including read-only one-time mount detection. Automated evidence includes full Backend, Frontend and Manager regression suites, private API tests for all three categories, password/session/CSRF/rate-limit boundaries, template privacy, conflict/concurrency and rollback, original/annotation validation, independent cloning, native financial/result/PDF compatibility, E-Constat preview, verification finalization, unmatched blocking, native production resumption and backup/restore of private assets.
 
 Live acceptance used a running native backend and actual HTTP operator endpoints with isolated controlled photo/PDF fixtures, rather than relying only on mocked unit results. It exercised quick results/annotations/reports, expertise identity redirection and unchanged external inputs, E-Constat preview, eight-photo verification finalization and unmatched blocking. A bounded real frontend browser check confirmed hidden controls before authentication, five-tap access, password login and the authenticated dashboard; no Playwright was used. Controlled fixtures remain outside production dossier/template storage.
 
