@@ -25,7 +25,7 @@ def create_backup(store, runner, log):
             if path.exists():
                 bundle.add(path, arcname=name)
     shutil.copy2(store.root / "compose.json", folder / "compose.json")
-    for name in ("installed", "installed-configuration", "imports", "configuration", "credentials"):
+    for name in ("installed", "installed-configuration", "imports", "configuration", "credentials", "real-operation-configured", "serial-attachment"):
         source = store.root / (name + ".json")
         if source.exists():
             shutil.copy2(source, folder / source.name)
@@ -64,7 +64,7 @@ def restore_backup(store, runner, folder, log):
     if "gateway" not in store.read("compose", {}).get("services", {}):
         (data / "runtime/manager-maintenance.lock").unlink(missing_ok=True)
     runner.run(compose_command(store, "up", "-d", "--wait", "--wait-timeout", "240", "--remove-orphans"), timeout=300)
-    for name in ("installed", "installed-configuration", "imports", "credentials", "configuration"):
+    for name in ("installed", "installed-configuration", "imports", "credentials", "configuration", "real-operation-configured", "serial-attachment"):
         source = folder / (name + ".json")
         if source.exists():
             shutil.copy2(source, store.root / source.name)
