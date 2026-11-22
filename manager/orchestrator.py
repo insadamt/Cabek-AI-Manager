@@ -78,10 +78,14 @@ class Orchestrator:
             raise
 
     def start(self, log):
+        from manager.serial_devices import refresh_saved_serial_mapping, device_signature
+        config = self.active_configuration()
+        refresh_saved_serial_mapping(self.store, config)
         runner = self.create_runner(log)
         runner.run(compose_command(self.store, 'up', '-d', '--wait', '--wait-timeout', '240'), timeout=300)
         resume(self.active_configuration(), self.configuration.ensure_credentials())
         self.store.write('services-stopped', False)
+        self.store.write('serial-attachment', device_signature(config))
 
     def apply(self, log, updating):
         if self.store.read('transaction', None):

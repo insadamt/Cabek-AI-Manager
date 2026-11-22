@@ -33,3 +33,16 @@ def test_disconnected_device_does_not_disable_or_remove_any_application(tmp_path
     monkeypatch.setattr('manager.serial_devices.device_signature',lambda config:None)
     assert not needs_attachment(store)
     assert 'lighting' in store.read('compose')['services']
+
+
+def test_start_removes_stale_usb_mapping_without_removing_lighting(tmp_path, monkeypatch):
+    from manager.serial_devices import refresh_saved_serial_mapping
+    store = Store(tmp_path)
+    store.write('compose', {'services': {'lighting': {'image': 'pinned-release',
+        'devices': ['/dev/missing:/dev/cabek-esp32'], 'group_add': ['20']},
+        'backend': {'image': 'unchanged'}}})
+    monkeypatch.setattr('manager.serial_devices.selected_serial_device', lambda config: None)
+    refresh_saved_serial_mapping(store, SiteConfig())
+    services = store.read('compose')['services']
+    assert services['lighting'] == {'image': 'pinned-release'}
+    assert services['backend'] == {'image': 'unchanged'}

@@ -19,4 +19,7 @@ jobs:
           node-version: '22'
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest tests -q
-      - run: node --check manager/web/app.js
+      - run: node --input-type=module --check < manager/web/app.js
+      - run: node --check manager/web/configuration.mjs
+      - run: node --check manager/web/rendering.mjs
+      - run: node --test tests/web-state.test.mjs

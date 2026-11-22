@@ -1,4 +1,6 @@
-/* Compose the light station console; depends on the three focused stylesheet modules. */
-@import url("/theme.css");
-@import url("/layout.css");
-@import url("/forms.css");
+/* Compose the Cabek station console theme; depends on focused, responsive style modules. */
+@import url("./theme.css");
+@import url("./layout.css");
+@import url("./applications.css");
+@import url("./forms.css");
+@import url("./responsive.css");

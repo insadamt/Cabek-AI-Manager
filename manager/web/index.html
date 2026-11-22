@@ -1,27 +1,49 @@
 <!doctype html>
-<!-- Configure the full Cabek station; depends on Manager's local JSON APIs and bundled assets. -->
+<!-- Manage the full station through clear next actions; depends on Manager APIs and original Cabek artwork. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Cabek AI Manager</title>
+    <link rel="icon" href="/brand/cabek-ai.png" />
     <link rel="stylesheet" href="/style.css" />
-    <script src="/app.js" defer></script>
+    <script type="module" src="/app.js"></script>
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="/">CABEK <span>AI Manager</span></a>
-      <div>
-        <span class="local-dot"></span> Local station
-        <span id="version" class="muted"></span>
+      <a class="product-brand" href="#overview" aria-label="Cabek AI Manager"
+        ><img src="/brand/cabek-ai.png" width="52" height="52" alt="" /><span
+          class="product-wordmark"
+          >Cabek <b>AI</b><small>MANAGER</small></span
+        ></a
+      >
+      <nav class="header-nav" aria-label="Main navigation">
+        <a href="#overview" aria-current="page">Overview</a
+        ><a href="#configuration">Configuration</a
+        ><a href="#activity">Activity</a>
+      </nav>
+      <div class="header-right">
+        <span class="station-local"
+          ><span class="local-dot"></span> Local station
+          <span id="version"></span></span
+        ><span class="brand-separator"></span
+        ><img
+          class="cabek-parent"
+          src="/brand/cabek.png"
+          width="77"
+          height="62"
+          alt="Cabek"
+        />
       </div>
     </header>
-    <main>
+    <main id="overview">
       <div class="page-heading">
         <div>
-          <p class="eyebrow">STATION MANAGEMENT</p>
-          <h1>Your Cabek ecosystem.</h1>
-          <p class="muted">One setup. Every application connected.</p>
+          <p class="eyebrow">YOUR CONNECTED WORKSPACE</p>
+          <h1>Station overview.</h1>
+          <p id="overview-description" class="muted">
+            Your applications, connections, and updates in one place.
+          </p>
         </div>
         <a
           id="open-app"
@@ -29,173 +51,298 @@
           hidden
           target="_blank"
           rel="noopener"
-          >Open Cabek AI ↗</a
+          >Open Cabek AI <span aria-hidden="true">↗</span></a
         >
       </div>
-      <div id="notice" role="status" hidden></div>
-      <section class="summary-grid" aria-label="Station summary">
-        <article>
-          <span>Applications</span><strong id="application-count">7</strong
-          ><small>Complete ecosystem</small>
-        </article>
-        <article>
-          <span>Services running</span><strong id="running-count">—</strong
-          ><small id="runtime-label">Checking station</small>
-        </article>
-        <article>
-          <span>Published updates</span><strong id="update-count">—</strong
-          ><small>Stable releases only</small>
-        </article>
-      </section>
-      <nav class="tabs" aria-label="Sections">
-        <a href="#applications">Applications</a
-        ><a href="#configuration">Configuration</a
-        ><a href="#activity">Activity</a>
-      </nav>
+      <div id="notice" role="status" hidden>
+        <span id="notice-message"></span
+        ><button id="dismiss-notice" aria-label="Dismiss notification">
+          ×
+        </button>
+      </div>
+      <div id="update-banner" class="update-banner" hidden>
+        <span class="update-symbol" aria-hidden="true">↗</span>
+        <div>
+          <strong id="update-banner-title"></strong>
+          <p>
+            Published releases are ready. Your settings and data are retained.
+          </p>
+        </div>
+        <a href="#applications"
+          >Review updates <span aria-hidden="true">→</span></a
+        >
+      </div>
+      <div class="overview-grid">
+        <section class="panel station-card" aria-label="Station summary">
+          <div class="station-card-top">
+            <div>
+              <span class="eyebrow">STATION RUNTIME</span>
+              <h2 id="runtime-title">Checking your station</h2>
+            </div>
+            <span id="runtime-badge" class="status-pill neutral">Checking</span>
+          </div>
+          <div class="station-numbers">
+            <div>
+              <strong id="running-count">—</strong
+              ><span id="runtime-label">Services running</span>
+            </div>
+            <div>
+              <strong id="application-count">7</strong
+              ><span>Applications included</span>
+            </div>
+            <div>
+              <strong id="update-count">—</strong><span>Published updates</span>
+            </div>
+          </div>
+          <ol class="setup-steps" aria-label="Setup progress">
+            <li id="step-config">
+              <span>1</span>
+              <div>Configure<small>Station details</small></div>
+            </li>
+            <li id="step-install">
+              <span>2</span>
+              <div>Install<small>All applications</small></div>
+            </li>
+            <li id="step-connect">
+              <span>3</span>
+              <div>Connect<small>Real hardware</small></div>
+            </li>
+          </ol>
+        </section>
+        <aside class="panel next-step">
+          <span class="eyebrow">YOUR NEXT STEP</span>
+          <h2 id="next-title">Checking your station</h2>
+          <p id="next-description">
+            Reading application and connection status.
+          </p>
+          <button id="next-action" class="primary">Checking…</button
+          ><small
+            ><span aria-hidden="true">✓</span> Every application is included by
+            default.</small
+          >
+        </aside>
+      </div>
       <section id="applications">
         <div class="section-heading">
           <div>
             <h2>Applications</h2>
-            <p class="muted">
-              Every application is included and configured together.
-            </p>
+            <p class="muted">The complete Cabek ecosystem. Managed together.</p>
           </div>
-          <span id="installation-state" class="badge">Not installed</span>
+          <span id="installation-state" class="badge">Checking</span>
         </div>
         <div class="toolbar">
-          <button id="install" class="primary">Install ecosystem</button
-          ><button id="update-all" class="primary" hidden>Update All</button
-          ><button id="check-updates">Check for updates</button
-          ><button id="start" hidden>Start services</button
-          ><button id="stop" hidden>Stop services</button
-          ><button id="recover" hidden>Recover interrupted operation</button
-          ><button id="refresh-services">Refresh status</button>
+          <div class="main-actions">
+            <button id="install" class="primary">Install ecosystem</button
+            ><button id="update-all" class="primary" hidden>Update All</button
+            ><button id="check-updates">Check for updates</button>
+          </div>
+          <details class="station-controls">
+            <summary>
+              Station controls <span aria-hidden="true">⌄</span>
+            </summary>
+            <div>
+              <button id="start" hidden>Start all services</button
+              ><button id="stop" hidden>Stop all services</button
+              ><button id="recover" hidden>Recover interrupted operation</button
+              ><button id="refresh-services">Refresh status</button>
+            </div>
+          </details>
         </div>
         <div class="panel table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Application</th>
-                <th>Installed</th>
+                <th>Installed version</th>
                 <th>Latest published</th>
-                <th>Status</th>
+                <th>Runtime</th>
               </tr>
             </thead>
             <tbody id="components"></tbody>
           </table>
         </div>
-        <div class="section-heading hardware-heading">
+        <p id="status-updated" class="status-updated">
+          Checking application status…
+        </p>
+      </section>
+      <section id="connections">
+        <div class="section-heading">
           <div>
-            <h3>Hardware connections</h3>
+            <h2>Hardware connections</h2>
             <p class="muted">
-              Application runtime and physical connections are checked
-              separately.
+              Applications stay installed when a device is disconnected.
             </p>
           </div>
+          <span id="connection-count" class="badge">Checking connections</span>
         </div>
         <div id="hardware" class="hardware-grid">
-          <p class="muted">Connection status appears after installation.</p>
+          <div class="panel hardware-card muted">
+            Connection status is loading.
+          </div>
         </div>
-        <div id="services" class="services"></div>
+        <details class="panel service-details">
+          <summary>
+            Service diagnostics <span id="service-summary"></span>
+          </summary>
+          <p class="muted">
+            Inspect service logs when troubleshooting a connection or operation.
+          </p>
+          <div id="services" class="services"></div>
+        </details>
       </section>
       <section id="configuration">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">CONFIGURE ONCE</p>
+            <p class="eyebrow">ONE SETUP FOR THE WHOLE STATION</p>
             <h2>Station configuration</h2>
             <p class="muted">
-              Service addresses and internal credentials are connected
-              automatically.
+              Enter your hardware details. The Manager connects the applications
+              for you.
             </p>
           </div>
+          <span id="unsaved-label" class="status-pill warning" hidden
+            >Unsaved changes</span
+          >
         </div>
         <div class="panel import-row">
-          <div>
-            <strong>Existing station configuration</strong>
-            <p class="muted">
-              Import NVR and lighting settings from the existing Cabek folders.
-            </p>
+          <div class="import-copy">
+            <span class="import-icon" aria-hidden="true">↙</span>
+            <div>
+              <strong>Already have a Cabek station?</strong>
+              <p id="imported-settings" class="muted">
+                Reuse your existing camera and lighting configuration.
+              </p>
+            </div>
           </div>
           <div class="import-actions">
-            <input
-              id="import-directory"
-              aria-label="Existing Cabek folder"
-              placeholder="Cabek folder, or leave blank to discover"
-            /><button id="import-configuration">Import settings</button>
+            <button id="import-configuration">Import existing settings</button>
+            <details>
+              <summary>Choose a folder</summary>
+              <input
+                id="import-directory"
+                aria-label="Existing Cabek folder"
+                placeholder="Absolute path to your Cabek folder"
+              />
+            </details>
           </div>
         </div>
         <form id="configuration-form" class="panel">
+          <div
+            id="configuration-error"
+            role="alert"
+            class="form-error"
+            hidden
+          ></div>
           <fieldset>
-            <legend>Camera station</legend>
+            <legend>
+              <span class="section-number">01</span> Camera station
+            </legend>
+            <p class="fieldset-description">
+              The NVR account is used only to connect your real station cameras.
+            </p>
             <div class="fields">
               <label
-                >NVR address<input
+                >NVR address <span class="field-required">Required</span
+                ><input
                   name="nvr_host"
-                  placeholder="NVR IP address or hostname" /></label
+                  required
+                  placeholder="e.g. 192.168.1.3"
+                  autocomplete="off" /></label
               ><label
                 >NVR account<input
                   name="nvr_user"
-                  autocomplete="username" /></label
+                  required
+                  autocomplete="username"
+                  placeholder="NVR username" /></label
               ><label
                 >NVR password<input
                   name="nvr_password"
                   type="password"
-                  autocomplete="new-password" /></label
+                  autocomplete="new-password"
+                /><small
+                  >A saved password is retained when this field is left
+                  blank.</small
+                ></label
               ><label
-                >Camera channels<input
+                >Configured camera channels<input
                   name="camera_channels"
+                  required
                   placeholder="1, 2, 3, 4, …"
-              /></label>
+                /><small
+                  >Use your station’s channel numbers, including 4, 13, 14, and
+                  10.</small
+                ></label
+              >
             </div>
           </fieldset>
           <fieldset>
-            <legend>Lighting</legend>
+            <legend>
+              <span class="section-number">02</span> Lighting connections
+            </legend>
+            <p class="fieldset-description">
+              ESP32 controls the exterior lighting. Shelly controls the interior
+              lighting.
+            </p>
             <div class="fields">
               <label
-                >ESP32 serial device<input
+                >ESP32 USB device<input
                   name="serial_device"
                   list="serial-devices"
                   placeholder="auto"
                 /><datalist id="serial-devices">
                   <option value="auto"></option></datalist
                 ><small
-                  >Auto detects one connected device. A disconnected device
-                  stays configured.</small
+                  >Auto detects one connected device. Use a stable device path
+                  if several are connected.</small
                 ></label
               ><label
-                >Shelly address<input
+                >Shelly address <span class="field-required">Required</span
+                ><input
                   name="interior_url"
-                  placeholder="http://Shelly-address" /></label
+                  type="url"
+                  required
+                  placeholder="http://192.168.1.…" /></label
               ><label
                 >Shelly switch ID<input
                   name="interior_switch_id"
                   type="number"
                   min="0"
-              /></label>
+                /><small
+                  >The switch configured for your interior lights.</small
+                ></label
+              >
             </div>
           </fieldset>
-          <fieldset>
-            <legend>Installation</legend>
+          <details class="advanced-settings">
+            <summary>
+              <span
+                >Advanced settings<small
+                  >Ports, storage, GitHub access, and additional datasets</small
+                ></span
+              ><span aria-hidden="true">⌄</span>
+            </summary>
             <div class="fields">
               <label
                 >Application port<input
                   name="app_port"
                   type="number"
                   min="1024"
-                  max="65535" /></label
+                  max="65535"
+                  required /></label
               ><label
                 >API port<input
                   name="api_port"
                   type="number"
                   min="1024"
-                  max="65535" /></label
+                  max="65535"
+                  required /></label
               ><label
                 >Station data directory<input
                   name="data_directory"
-                  placeholder="Automatic private installation storage"
+                  placeholder="Managed automatically"
                 /><small
-                  >Choose before installation; existing station data is
-                  preserved during updates.</small
+                  >Choose before installation. Moving existing data requires a
+                  migration.</small
                 ></label
               ><label
                 >GitHub token<input
@@ -203,8 +350,7 @@
                   type="password"
                   autocomplete="new-password"
                 /><small
-                  >An authenticated GitHub CLI can also supply repository
-                  access.</small
+                  >Optional when the GitHub CLI is already authenticated.</small
                 ></label
               >
             </div>
@@ -213,36 +359,81 @@
                 name="dataset_paths"
                 rows="3"
                 placeholder="One absolute JSON, ZIP, or directory path per line"
-              ></textarea>
-            </label>
-          </fieldset>
+              ></textarea
+              ><small
+                >Bundled pricing data is initialized automatically. Additional
+                datasets are validated before import.</small
+              ></label
+            >
+          </details>
           <div class="form-footer">
-            <p class="muted">
-              Saved credentials are retained when password fields are left
-              empty.
+            <p>
+              <span class="local-dot"></span> Internal service credentials are
+              managed automatically.
             </p>
-            <button type="submit" class="primary">Save configuration</button>
+            <button
+              id="save-configuration"
+              type="submit"
+              class="primary"
+              disabled
+            >
+              Save station settings
+            </button>
           </div>
         </form>
         <details class="panel prerequisites">
-          <summary>Installation prerequisites</summary>
-          <button id="check-prerequisites">Check this PC</button>
+          <summary>
+            <span
+              >System requirements<small id="prerequisites-state"
+                >Docker, GitHub access, and available storage</small
+              ></span
+            >
+          </summary>
+          <button id="check-prerequisites">Check requirements</button>
           <div id="prerequisites"></div>
         </details>
       </section>
       <section id="activity">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">INSTALLATION & UPDATES</p>
-            <h2 id="job-title">Activity</h2>
+            <h2>Activity</h2>
+            <p class="muted">
+              Follow installation and updates without leaving the Manager.
+            </p>
           </div>
           <span id="job-status" class="badge">Idle</span>
         </div>
-        <pre id="events" class="panel">
-Operation progress will appear here.</pre>
+        <div class="panel activity-card">
+          <div class="activity-summary">
+            <span
+              id="activity-symbol"
+              class="activity-symbol"
+              aria-hidden="true"
+              >✓</span
+            >
+            <div>
+              <h3 id="job-title">Your station activity</h3>
+              <p id="activity-message" class="muted">
+                Operation progress appears here.
+              </p>
+            </div>
+            <span id="job-time" class="activity-time"></span>
+          </div>
+          <details id="technical-log">
+            <summary>Technical log <span aria-hidden="true">⌄</span></summary>
+            <div class="log-toolbar">
+              <span class="muted">Private credentials are redacted.</span
+              ><button id="copy-log">Copy log</button>
+            </div>
+            <pre id="events">No operation has started.</pre>
+          </details>
+        </div>
       </section>
       <footer class="page-footer">
-        Cabek AI Manager · Ubuntu/Linux · One station
+        <span
+          >Cabek AI Manager <span aria-hidden="true">·</span> Your local station
+          workspace</span
+        ><a href="#overview">Back to overview ↑</a>
       </footer>
     </main>
     <dialog id="logs-dialog">

@@ -56,3 +56,16 @@ def attach_serial(store, runner, log):
             resume(config, credentials)
         except OSError:
             log('Gateway unavailable; resume admission after recovering its connection.')
+
+
+def refresh_saved_serial_mapping(store, config):
+    """Refresh transient USB paths at startup without changing installed image revisions."""
+    compose = store.read('compose')
+    lighting = compose['services']['lighting']
+    lighting.pop('devices', None)
+    lighting.pop('group_add', None)
+    device = selected_serial_device(config)
+    if device:
+        lighting['devices'] = [f'{device.resolve()}:/dev/cabek-esp32']
+        lighting['group_add'] = [str(device.stat().st_gid)]
+    store.write('compose', compose)
