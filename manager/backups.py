@@ -20,7 +20,7 @@ def create_backup(store, runner, log):
                '--single-transaction --routines --triggers "$MARIADB_DATABASE"'),
                timeout=600, output_path=folder / "database.sql", quiet=True)
     with tarfile.open(folder / "station-data.tar.gz", "w:gz") as bundle:
-        for name in ("dossiers", "runtime", "ocr-output"):
+        for name in ("dossiers", "runtime", "ocr-output", "demo-photos", "private-demo"):
             path = data_root(store.root, Configuration(store).load()) / name
             if path.exists():
                 bundle.add(path, arcname=name)
@@ -56,7 +56,7 @@ def restore_backup(store, runner, folder, log):
     values = json.loads(saved_config.read_text()) if saved_config.exists() else {}
     data = data_root(store.root, SiteConfig.model_construct(**values))
     with tarfile.open(folder / "station-data.tar.gz") as bundle:
-        for name in ("dossiers", "runtime", "ocr-output"):
+        for name in ("dossiers", "runtime", "ocr-output", "demo-photos", "private-demo"):
             path = data / name
             if path.exists():
                 shutil.rmtree(path)

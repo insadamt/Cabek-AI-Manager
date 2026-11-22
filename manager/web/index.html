@@ -393,7 +393,14 @@
           <div id="prerequisites"></div>
         </details>
       </section>
-      <section id="activity">
+      <section id="dossier-import" class="panel prerequisites">
+      <h2>Import existing dossiers</h2>
+      <p class="muted">Copy native dossiers or a ZIP archive without replacing existing production data. Validate first; conflicts stop the entire import.</p>
+      <label>Local directory or ZIP path<input id="dossier-import-source" placeholder="/absolute/path/to/dossiers" /></label>
+      <label>Optional dossier IDs<input id="dossier-import-ids" placeholder="Comma-separated IDs; blank imports every valid dossier" /></label>
+      <div class="main-actions"><button id="validate-dossier-import">Validate import</button><button id="apply-dossier-import">Import validated dossiers</button></div>
+    </section>
+    <section id="activity">
         <div class="section-heading">
           <div>
             <h2>Activity</h2>

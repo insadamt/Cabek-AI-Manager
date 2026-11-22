@@ -63,3 +63,7 @@ See [architecture and acceptance checks](docs/architecture.md). Tests and deploy
 recipes belong to Manager. Run original application regression tests without
 editing their repositories. Physical capture and lighting checks require connected
 hardware; simulated unit-test inputs do not establish station readiness.
+
+## Private demo dossiers and additive imports
+
+Native private administration, secure password initialization, sample storage, guarded E-Constat imports, backup/recovery, validation and the stable-release deployment order are documented in [the consolidated technical report](docs/private-demo-system.md). Deployment recipes remain owned by Manager.

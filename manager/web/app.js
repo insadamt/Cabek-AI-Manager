@@ -223,3 +223,13 @@ refresh();
 refreshServices();
 setInterval(refresh, 2500);
 setInterval(refreshServices, 15000);
+
+for (const [id, apply] of [['validate-dossier-import', false], ['apply-dossier-import', true]]) {
+  document.querySelector(`#${id}`).addEventListener('click', async () => {
+    try {
+      await api('dossiers/import', 'POST', {source: document.querySelector('#dossier-import-source').value.trim(), apply, ids: document.querySelector('#dossier-import-ids').value.split(',').map(value=>value.trim()).filter(Boolean)});
+      notice('Import operation started. Review Activity for validation and conflicts.');
+      await refresh();
+    } catch (error) { notice(error.message, true); }
+  });
+}

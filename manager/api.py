@@ -22,6 +22,7 @@ from manager.configuration import Configuration, SiteConfig
 from manager.readiness import hardware_readiness
 from manager.serial_devices import needs_attachment, attach_serial
 from manager.jobs import Jobs
+from manager.deployment_migration import needs_private_storage
 from manager.orchestrator import Orchestrator
 from manager.storage import Store
 from manager.system import compose_command, preflight, service_status
@@ -136,7 +137,7 @@ def create_app(root=None, watch_releases=True):
                 "updates": store.read("updates", {"components": [], "updates_available": False}),
                 "job": jobs.snapshot(), "application_url": f"http://localhost:{config.app_port}",
                 "recovery_required": bool(store.read("transaction", None)),
-                "configuration_pending": store.read("installed-configuration", None) != configuration.load().model_dump()}
+                "configuration_pending": store.read("installed-configuration", None) != configuration.load().model_dump() or needs_private_storage(store)}
 
     @app.get("/api/services")
     def services():
@@ -197,6 +198,18 @@ def create_app(root=None, watch_releases=True):
     @app.post("/api/recover")
     def recover():
         return jobs.submit("Recover interrupted operation", operations.recover_interrupted_update, allow_pending_restart=True)
+
+    @app.post('/api/dossiers/import')
+    def import_dossier_files(payload: dict):
+        from manager.dossier_import import import_dossiers
+        source = payload.get('source', '')
+        apply = payload.get('apply', False)
+        if type(apply) is not bool or not isinstance(source, str):
+            raise ValueError('Invalid import request.')
+        if not store.read('installed', {}):
+            raise ValueError('Install the ecosystem first.')
+        return jobs.submit('Import local dossiers' if apply else 'Validate local dossiers',
+            lambda log: import_dossiers(store, operations.create_runner(log), source, apply, log, payload.get('ids')))
 
     app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent / "web", html=True), name="interface")
     return app

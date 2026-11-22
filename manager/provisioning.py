@@ -32,5 +32,5 @@ def provision_pricing(store, configuration, runner, log):
 
 
 def configure_real_station(store, runner):
-    script = "import json,urllib.request; request=urllib.request.Request('http://127.0.0.1:8000/api/settings/operation',data=json.dumps({'demo_mode':False}).encode(),headers={'Content-Type':'application/json'},method='PATCH'); urllib.request.urlopen(request,timeout=10).read()"
-    runner.run(compose_command(store, 'exec', '-T', 'backend', 'python', '-c', script), quiet=True)
+    # New native backends default to real operation; private demo preferences survive updates.
+    return None

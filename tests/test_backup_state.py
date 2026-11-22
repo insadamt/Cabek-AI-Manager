@@ -21,7 +21,10 @@ def test_restore_recovers_mode_and_serial_state_instead_of_retaining_failed_depl
             if kwargs.get('output_path'):
                 kwargs['output_path'].write_text('SELECT 1;')
             return ''
+    private=tmp_path/'data/private-demo/templates/private.json';private.parent.mkdir(parents=True);private.write_text('private-original')
+    sample=tmp_path/'data/demo-photos/front.jpg';sample.parent.mkdir(parents=True);sample.write_bytes(b'original-photo')
     backup=create_backup(store,Runner(),lambda message:None)
+    private.write_text('changed');sample.unlink()
     store.write('real-operation-configured',True)
     store.write('serial-attachment',{'path':'failed-device'})
     data.write_text('modified')
@@ -30,3 +33,5 @@ def test_restore_recovers_mode_and_serial_state_instead_of_retaining_failed_depl
     assert store.read('real-operation-configured') is False
     assert store.read('serial-attachment')=={'path':'previous-device'}
     assert data.read_text()=='original'
+    assert private.read_text()=='private-original'
+    assert sample.read_bytes()==b'original-photo'

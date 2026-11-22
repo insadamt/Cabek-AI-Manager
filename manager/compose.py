@@ -30,7 +30,7 @@ def selected_serial_device(config):
 
 def prepare_runtime_directories(root, config=None):
     data = data_root(root, config) if config else Path(root) / 'data'
-    for name in ('dossiers', 'runtime', 'ocr-output', 'ocr-models'):
+    for name in ('dossiers', 'runtime', 'ocr-output', 'ocr-models', 'demo-photos', 'private-demo'):
         (data / name).mkdir(parents=True, exist_ok=True)
 
 
@@ -117,7 +117,8 @@ def render_compose(root, config, credentials, revisions):
     ocr['healthcheck'] = python_health("import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health',timeout=3)")
     backend = application('backend')
     backend['environment'] = {'CABEK_DOSSIERS_DIR': '/data/dossiers', 'CABEK_RUNTIME_DIR': '/data/runtime',
-        'CABEK_MODELS_DIR': '/app/models', 'CABEK_TUNNEL_MODE': 'tiandy',
+        'CABEK_MODELS_DIR': '/app/models', 'CABEK_MOCK_PHOTOS_DIR': '/data/demo-photos',
+        'CABEK_DEMO_DIR': '/data/private-demo', 'CABEK_DEMO_SECRET_FILE': '/data/private-demo/secret.json', 'CABEK_TUNNEL_MODE': 'tiandy',
         'AUTOESTIMATE_BASE_URL': 'http://pricing-web/api/v1', 'AUTOESTIMATE_TOKEN': credentials.get('autoestimate_token', ''),
         'CABEK_TIANDY_API_URL': 'http://127.0.0.1:8001', 'CABEK_TIANDY_API_KEY': credentials['camera_key'],
         'CABEK_LIGHTS_ENABLED': '1', 'CABEK_LIGHTS_API_URL': 'http://127.0.0.1:9001',
@@ -125,7 +126,7 @@ def render_compose(root, config, credentials, revisions):
         'CABEK_INTERNAL_LIGHTS_SWITCH_ID': str(config.interior_switch_id),
         'CABEK_ECONSTAT_API_URL': 'http://127.0.0.1:8002', 'CABEK_ECONSTAT_API_TOKEN': credentials['ocr_token'],
         'OMP_NUM_THREADS': '4', 'OPENBLAS_NUM_THREADS': '4', 'TORCH_HOME': '/tmp/torch'}
-    backend['volumes'] = [f'{data}/{name}:/data/{name}' for name in ('dossiers', 'runtime')]
+    backend['volumes'] = [f'{data}/{name}:/data/{name}' for name in ('dossiers', 'runtime', 'private-demo')] + [f'{data}/demo-photos:/data/demo-photos:ro']
     backend['depends_on'] = {name: {'condition': 'service_healthy'} for name in ('gateway', 'cameras', 'lighting', 'ocr', 'pricing-web')}
     backend['healthcheck'] = python_health("import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/settings/operation',timeout=3)")
     frontend = application('frontend')
