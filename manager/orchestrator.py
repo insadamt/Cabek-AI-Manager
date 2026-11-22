@@ -124,6 +124,7 @@ class Orchestrator:
         backup = None
         drained = False
         backend_stopped = False
+        committed = False
         old_compose = self.store.read('compose', {})
         legacy = bool(old_compose) and 'gateway' not in old_compose.get('services', {})
         try:
@@ -162,7 +163,6 @@ class Orchestrator:
             request_native(config, '/api/settings/operation')
             request_native(config, '/api/vehicles/marques')
             request_native(config, '/api/cameras')
-            resume(config, self.configuration.ensure_credentials())
             self.store.write('real-operation-configured', True)
             self.store.write('installed', targets)
             self.store.write('installed-configuration', config.model_dump())
@@ -177,8 +177,16 @@ class Orchestrator:
             from manager.serial_devices import device_signature
             self.store.write('serial-attachment', device_signature(config))
             self.store.write('services-stopped', False)
+            committed = True
+            try:
+                resume(config, self.configuration.ensure_credentials())
+            except OSError:
+                log('Deployment committed; use Start services to resume gateway admission.')
             log('All applications installed. Hardware readiness is reported separately.')
         except Exception:
+            if committed:
+                raise
+            (self.store.root / 'manager-next.json').unlink(missing_ok=True)
             if backup:
                 log('Deployment failed; restoring the previous application and database backup.')
                 runner.run(compose_command(self.store, 'stop'), timeout=120)
