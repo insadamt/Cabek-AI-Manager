@@ -104,3 +104,36 @@ def test_failed_admission_drain_leaves_running_applications_untouched(tmp_path, 
     assert not any('stop' in command for command in commands)
     assert store.read('installed')==original
     assert resumed==[True]
+
+
+def test_new_writes_reopen_only_after_durable_deployment_state(tmp_path,monkeypatch):
+    from contextlib import nullcontext
+    store=Store(tmp_path)
+    configuration=Configuration(store)
+    configuration.save({'nvr_host':'192.0.2.1','nvr_password':'test-password','interior_url':'http://192.0.2.2'})
+    original={key:revision() for key in ('manager','backend','frontend','cameras','lighting','ocr','autoestimate')}
+    store.write('installed',original)
+    store.write('installed-configuration',configuration.load().model_dump())
+    store.write('compose',{'name':'own','services':{'gateway':{}}})
+    store.write('real-operation-configured',True)
+    monkeypatch.setattr('manager.orchestrator.preflight',lambda *args:{'ready':True})
+    monkeypatch.setattr(GitHub,'latest',lambda *args:revision('v1.1.0','b'*40))
+    monkeypatch.setattr(GitHub,'download',lambda self,repository,sha,destination:destination.mkdir(parents=True))
+    monkeypatch.setattr('manager.commands.CommandRunner.run',lambda *args,**kwargs:'')
+    monkeypatch.setattr('manager.orchestrator.prepare_manager',lambda *args:None)
+    monkeypatch.setattr('manager.orchestrator.drain',lambda *args:None)
+    monkeypatch.setattr('manager.orchestrator.idle_station',lambda *args:nullcontext())
+    monkeypatch.setattr('manager.orchestrator.create_backup',lambda *args:tmp_path/'backups/snapshot')
+    monkeypatch.setattr('manager.orchestrator.provision_pricing',lambda *args:None)
+    monkeypatch.setattr('manager.orchestrator.configure_real_station',lambda *args:pytest.fail('An update must preserve existing native operation preferences'))
+    monkeypatch.setattr('manager.orchestrator.request_native',lambda *args:{'demo_mode':False})
+    monkeypatch.setattr('manager.serial_devices.device_signature',lambda *args:None)
+    opened=[]
+    def open_admission(*args):
+        assert store.read('transaction',None) is None
+        assert all(item['tag']=='v1.1.0' for item in store.read('installed').values())
+        assert store.read('installed-configuration')==configuration.load().model_dump()
+        opened.append(True)
+    monkeypatch.setattr('manager.orchestrator.resume',open_admission)
+    Orchestrator(store,configuration).update_all(lambda message:None)
+    assert opened

@@ -170,13 +170,13 @@ class Orchestrator:
             self.store.write('updates', {'components': [{**item, 'installed': targets[item['key']], 'update_available': False} for item in updates['components']], 'updates_available': False})
             if manager_update:
                 self.store.write('manager-next', manager_update)
-            self.store.write('transaction', None)
             if self.store.read('correction', None):
                 correction = self.store.read('correction')
                 self.store.write('correction', {**correction, 'phase': 'completed'})
             from manager.serial_devices import device_signature
             self.store.write('serial-attachment', device_signature(config))
             self.store.write('services-stopped', False)
+            self.store.write('transaction', None)
             committed = True
             try:
                 resume(config, self.configuration.ensure_credentials())
