@@ -1,6 +1,6 @@
 # Private demo dossiers, imports, and diagnostics
 
-This consolidated technical report explains the new native private administration, safe dossier imports, Manager deployment changes, validation evidence, and operating limits. It depends on Backend v0.2.1, Frontend v0.2.0, Manager v0.3.1, the existing native dossier/result schemas, Docker Compose, and private local storage. It supplements the deployment architecture document; no application source is patched during builds.
+This consolidated technical report explains the new native private administration, safe dossier imports, Manager deployment changes, validation evidence, and operating limits. It depends on Backend v0.2.2, Frontend v0.2.0, Manager v0.3.1, the existing native dossier/result schemas, Docker Compose, and private local storage. It supplements the deployment architecture document; no application source is patched during builds.
 
 ## Components and changed files
 
@@ -77,7 +77,7 @@ Manager reports process health, actual camera image availability, NVR route/RTSP
 
 ## Release/deployment sequence
 
-1. Commit Backend changes coherently and publish stable **v0.2.1** on its existing `dev` branch.
+1. Commit Backend changes coherently and publish stable **v0.2.2** on its existing `dev` branch.
 2. Commit Frontend changes coherently and publish stable **v0.2.0** on `master`.
 3. Commit Manager deployment, tests and this report coherently and publish stable **v0.3.1** on `main` after checks pass.
 4. Use **Check for updates**, then **Update All**. For the one-time upgrade from the older renderer, wait for the new Manager to restart, then choose **Apply configuration** when shown to add the private mounts. New installations use the correct mounts immediately. There is no automatic disruptive startup migration. Manager downloads published stable archives; branch commits, plain tags, drafts and prereleases are not deployment inputs.
@@ -87,9 +87,9 @@ No tags are rewritten. Existing application data and unrelated local projects re
 
 ## Verification and manual checklist
 
-Recorded checks before publication: Backend **425 passed**, Frontend **779 passed / 106 files**, Manager **68 passed** plus **6 Node UI state tests**; including read-only one-time mount detection. Automated evidence includes full Backend, Frontend and Manager regression suites, private API tests for all three categories, password/session/CSRF/rate-limit boundaries, template privacy, conflict/concurrency and rollback, original/annotation validation, independent cloning, native financial/result/PDF compatibility, E-Constat preview, verification finalization, unmatched blocking, native production resumption and backup/restore of private assets.
+Recorded checks before publication: Backend **426 passed**, Frontend **779 passed / 106 files**, Manager **68 passed** plus **6 Node UI state tests**; including read-only one-time mount detection. Automated evidence includes full Backend, Frontend and Manager regression suites, private API tests for all three categories, password/session/CSRF/rate-limit boundaries, template privacy, conflict/concurrency and rollback, original/annotation validation, independent cloning, native financial/result/PDF compatibility, E-Constat preview, verification finalization, unmatched blocking, native production resumption and backup/restore of private assets.
 
-Live acceptance used a running native backend and actual HTTP operator endpoints with isolated controlled photo/PDF fixtures, rather than relying only on mocked unit results. It exercised quick results/annotations/reports, expertise identity redirection and unchanged external inputs, E-Constat preview, eight-photo verification finalization and unmatched blocking. A bounded real frontend browser check confirmed hidden controls before authentication, five-tap access, password login and the authenticated dashboard; no Playwright was used. Controlled fixtures remain outside production dossier/template storage.
+Live acceptance used a running native backend and actual HTTP operator endpoints with isolated controlled photo/PDF fixtures, rather than relying only on mocked unit results. It exercised quick results/annotations/reports, expertise identity redirection and unchanged external inputs, E-Constat preview, eight-photo verification finalization and unmatched blocking. A bounded real frontend browser check confirmed hidden controls before authentication, five-tap access, password login and the authenticated dashboard. A second real browser flow used the ordinary Scanner and camera confirmation, opened the normal photo/annotation result view and the Estimation tab, and verified the prepared financial total; no Playwright was used. Controlled fixtures remain outside production dossier/template storage.
 
 - [x] Hidden dashboard and every management API require server authentication.
 - [x] Native fixtures for all three dossier types validate and materialize through ordinary operator endpoints.
@@ -98,8 +98,8 @@ Live acceptance used a running native backend and actual HTTP operator endpoints
 - [x] Normal production API behavior and regression suites remain covered.
 - [x] Backup/restore tests preserve private templates and sample photos.
 - [x] Browser login interaction and diagnostic presentation reviewed.
-- [ ] Verify the final installed stable releases and enabled Manager user service on the station.
-- [ ] Confirm the four real E-Constat dossiers import without conflicts and review their existing PDFs/OCR data.
+- [x] Final installed releases verified: Manager v0.3.1, Backend v0.2.2, Frontend v0.2.0; all nine services running and the user service active.
+- [x] All four requested E-Constat dossiers imported without conflicts; original source artifacts and existing production dossier fingerprints preserved, and all four document/preparation/preview endpoints respond successfully.
 - [ ] Prepare owner-approved production templates and review their actual results visually.
 - [ ] Confirm direct Ethernet and RTSP guidance against the station's connected NVR.
 - [ ] Verify real ESP32/Shelly output and normal real capture after disabling demo operation.
@@ -108,3 +108,19 @@ Live acceptance used a running native backend and actual HTTP operator endpoints
 Remaining physical checks cannot be inferred from API health, USB detection or prepared demonstrations. Sample photos are supplied by the owner; the installer does not invent vehicle evidence. This version uses the native JSON contract for detailed prepared result editing rather than a new financial/detection form editor.
 
 Suggested commit messages: `feat(backend): add authenticated private demo dossiers and safe native imports`; `feat(frontend): add hidden demo administration and truthful diagnostics`; `feat(manager): preserve private demo data and guard dossier imports`.
+
+## Final station handover results
+
+Published application/deployment commits are on their existing branches. Backend's initial feature was followed by fixes for independent creation identity, existing mPDF imports and complete verification previews. Manager's v0.3.1 fixes the observed explicit-apply early-return bug; no automatic startup update was added. All existing release tags remain unchanged.
+
+The exact owner password was initialized locally through stdin and is stored only as a mode-0600 hash beneath the private mode-0700 directory. Login, protected API access, public-toggle rejection and logout were verified against the installed application. Demo operation is **disabled**, and the production private registry contains **zero test templates**. Controlled fixtures remain only under ignored isolated validation storage.
+
+The final update recreated the stack after password initialization and the four real imports. A read-only audit verified their preservation and confirmed that the newest backup contains the private secret, demo-photo directory and all four imported dossiers. Pricing remains **one API client, 11,612 observations and 48 canonical parts**. Existing production dossier content matches its recorded pre-upgrade fingerprint.
+
+Final automated results: **426 Backend tests**, including **25 private-feature tests**; **779 Frontend tests / 106 files**, TypeScript and production build; **68 Manager tests** plus **6 Node UI state tests**. Manager patch CI passed (run `45066682947`). Real HTTP acceptance covered every dossier category, and the ordinary quick-estimation Scanner-to-result browser flow passed. No Playwright was run.
+
+Current hardware readiness is reported separately from the nine running services: NVR/RTSP needs attention, NVR images are unavailable, ESP32 is disconnected, and Shelly is disconnected. Physical output/capture checks and owner-prepared production template review therefore remain on the manual checklist. The operator browser check used controlled fixtures, not copied production evidence.
+
+The slow source-archive download was stopped before any deployment mutation. Backend and Frontend archives were cached from their exact local committed Git trees after verifying the corresponding published stable tag SHAs on GitHub. Release selection and installed source revisions were preserved.
+
+Sanitized local evidence is available in the workspace `work/` directory: `private-demo-final-audit.json`, `requested-econstat-import-proof.json`, `private-demo-http-proof.json`, `private-demo-ui-proof.log`, `private-demo-operator-ui-proof.log`, and the final regression/deployment logs. Interface screenshots are in the workspace `outputs/` directory. No password, hash, private dossier content or template assets are included in this report.
