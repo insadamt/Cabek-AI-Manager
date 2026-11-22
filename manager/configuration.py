@@ -33,6 +33,14 @@ class SiteConfig(BaseModel):
     ocr_enabled: bool = True
     dataset_paths: list[str] = Field(default_factory=list)
 
+    @field_validator("github_token")
+    @classmethod
+    def normalize_github_token(cls, value):
+        value = value.strip()
+        if len(value) > 4096 or any(character.isspace() for character in value):
+            raise ValueError("Enter a GitHub token without embedded whitespace.")
+        return value
+
     @field_validator("camera_channels")
     @classmethod
     def validate_channels(cls, value):
@@ -71,7 +79,8 @@ class SiteConfig(BaseModel):
                 raise ValueError("Select the connected ESP32 device under /dev/.")
         if self.interior_enabled:
             parsed = urlsplit(self.interior_url)
-            if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.query or parsed.fragment:
+            if (parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password
+                    or parsed.query or parsed.fragment or parsed.path not in ("", "/")):
                 raise ValueError("Enter a direct Shelly HTTP address.")
         return self
 
@@ -102,7 +111,7 @@ class Configuration:
             result[key + "_configured"] = bool(result.pop(key))
         return result
 
-    def credentials(self):
+    def ensure_credentials(self):
         values = self.store.read("credentials", {})
         for key in ("db_password", "db_root_password", "camera_key", "ocr_token", "manager_key", "autoestimate_token"):
             values.setdefault(key, secrets.token_urlsafe(36))

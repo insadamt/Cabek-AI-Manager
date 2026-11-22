@@ -4,6 +4,7 @@ Depends on repository Dockerfiles and persistent host directories. Internal DNS
 addresses and shared credentials are generated here instead of edited per repo.
 """
 from pathlib import Path
+import os
 
 
 def health(url):
@@ -11,11 +12,24 @@ def health(url):
             "interval": "10s", "timeout": "5s", "retries": 12, "start_period": "30s"}
 
 
+def escape_compose_literals(value):
+    if isinstance(value, str):
+        return value.replace("$", "$$")
+    if isinstance(value, list):
+        return [escape_compose_literals(item) for item in value]
+    if isinstance(value, dict):
+        return {key: escape_compose_literals(item) for key, item in value.items()}
+    return value
+
+
+def prepare_runtime_directories(root):
+    for name in ("dossiers", "runtime", "mock-photos", "ocr-output", "ocr-models"):
+        (Path(root) / "data" / name).mkdir(parents=True, exist_ok=True)
+
+
 def render_compose(root, config, credentials, revisions):
     root = Path(root).resolve()
     data = root / "data"
-    for name in ("dossiers", "runtime", "mock-photos", "ocr-output", "ocr-models"):
-        (data / name).mkdir(parents=True, exist_ok=True)
     project = "cabek-ai-manager"
 
     def source(key):
@@ -25,8 +39,12 @@ def render_compose(root, config, credentials, revisions):
         build = {"context": source(key)}
         if target:
             build["target"] = target
-        return {"build": build, "image": f"cabek-managed-{key}:{revisions[key]['sha'][:12]}" + ("-" + target if target else ""),
-                "restart": "unless-stopped"}
+        service = {"build": build, "image": f"cabek-managed-{key}:{revisions[key]['sha'][:12]}" + ("-" + target if target else ""),
+                   "restart": "unless-stopped"}
+        if key in ("backend", "cameras", "lighting", "ocr"):
+            # Host-owned files remain readable and recoverable by the manager after a container exits.
+            service["user"] = f"{os.getuid()}:{os.getgid()}"
+        return service
 
     database = {
         "image": "mariadb:11.8", "restart": "unless-stopped",
@@ -71,6 +89,7 @@ def render_compose(root, config, credentials, revisions):
         "CABEK_ECONSTAT_API_URL": "http://ocr:8002",
         "CABEK_ECONSTAT_API_TOKEN": credentials["ocr_token"] if config.ocr_enabled else "",
         "OMP_NUM_THREADS": "4", "OPENBLAS_NUM_THREADS": "4",
+        "TORCH_HOME": "/tmp/torch",
     }
     backend["volumes"] = [f"{data}/{name}:/data/{name}" for name in ("dossiers", "runtime", "mock-photos")]
     backend["ports"] = [f"127.0.0.1:{config.api_port}:8000"]
@@ -97,14 +116,16 @@ def render_compose(root, config, credentials, revisions):
         lights = application("lighting")
         lights["environment"] = {"CABEK_LIGHTS_PORT": "/dev/cabek-esp32"}
         lights["devices"] = [f"{Path(config.serial_device).resolve()}:/dev/cabek-esp32"]
+        lights["group_add"] = [str(Path(config.serial_device).stat().st_gid)]
         lights["healthcheck"] = health("http://127.0.0.1:8001/health")
         services["lighting"] = lights
         backend["depends_on"]["lighting"] = {"condition": "service_healthy"}
     if config.ocr_enabled:
         ocr = application("ocr")
         ocr["environment"] = {"ECONSTAT_API_TOKEN": credentials["ocr_token"], "EASYOCR_MODULE_PATH": "/models",
-                              "ECONSTAT_OUTPUT_DIR": "/output", "OMP_NUM_THREADS": "4"}
+                              "ECONSTAT_OUTPUT_DIR": "/output", "OMP_NUM_THREADS": "4", "TORCH_HOME": "/tmp/torch"}
         ocr["volumes"] = [f"{data}/ocr-models:/models", f"{data}/ocr-output:/output"]
         ocr["healthcheck"] = health("http://127.0.0.1:8002/health")
         services["ocr"] = ocr
-    return {"name": project, "services": services, "volumes": {"pricing_database": {}}, "networks": {"default": {}}}
+    # Compose interpolates strings even in JSON; passwords and paths must retain literal dollar signs.
+    return escape_compose_literals({"name": project, "services": services, "volumes": {"pricing_database": {}}, "networks": {"default": {}}})

@@ -12,7 +12,7 @@ from manager.backups import create_backup, restore_backup
 from manager.catalog import enabled_components
 from manager.commands import CommandRunner
 from manager.configuration import SiteConfig
-from manager.compose import render_compose
+from manager.compose import render_compose, prepare_runtime_directories
 from manager.releases import GitHub, version_tuple
 from manager.system import compose_command, preflight, require_free_ports
 from manager.self_update import prepare_manager
@@ -24,14 +24,14 @@ class Orchestrator:
         self.store = store
         self.configuration = configuration
 
-    def runner(self, log=None):
+    def create_runner(self, log=None):
         config = self.configuration.load()
-        credentials = self.configuration.credentials()
+        credentials = self.configuration.ensure_credentials()
         return CommandRunner([config.github_token, config.nvr_password, *credentials.values()], log)
 
     def check_updates(self):
         config = self.configuration.load()
-        github = GitHub(self.runner(), config.github_token)
+        github = GitHub(self.create_runner(), config.github_token)
         installed = self.store.read("installed", {})
         results = []
         for component in enabled_components(config):
@@ -46,7 +46,7 @@ class Orchestrator:
             except (ValueError, RuntimeError, OSError) as error:
                 results.append({"key": component.key, "name": component.name, "repository": component.repository,
                                 "installed": current, "latest": None, "update_available": False,
-                                "error": self.runner().redact(str(error))})
+                                "error": self.create_runner().redact(str(error))})
         result = {"components": results, "updates_available": any(item["update_available"] for item in results)}
         self.store.write("updates", result)
         return result
@@ -60,8 +60,10 @@ class Orchestrator:
         self.apply(log, updating=True)
 
     def apply(self, log, updating):
+        if self.store.read("transaction", None):
+            raise ValueError("Recover the interrupted operation before starting another installation or update.")
         config = self.configuration.load()
-        runner = self.runner(log)
+        runner = self.create_runner(log)
         checks = preflight(runner, config.github_token)
         if not checks["ready"]:
             raise ValueError("Prerequisites failed: " + "; ".join(item["name"] for item in checks["checks"] if not item["ok"]))
@@ -91,7 +93,8 @@ class Orchestrator:
                 github.download(component.repository, revision["sha"], destination)
             if component.key != "manager" and not (destination / "Dockerfile").is_file():
                 raise ValueError(f"{component.name} release {revision['tag']} has no Dockerfile.")
-        credentials = self.configuration.credentials()
+        credentials = self.configuration.ensure_credentials()
+        prepare_runtime_directories(self.store.root)
         compose = render_compose(self.store.root, config, credentials, targets)
         old_compose = self.store.read("compose", None)
         self.store.write("candidate-compose", compose)
@@ -108,7 +111,10 @@ class Orchestrator:
                 drained = True
                 drain(previous_config, credentials, log)
                 backup = create_backup(self.store, runner, log)
+                self.store.write("transaction", {"backup": str(backup), "first_install": False})
                 runner.run(compose_command(self.store, "stop", "backend", "frontend"), timeout=90)
+            else:
+                self.store.write("transaction", {"backup": None, "first_install": True})
             self.store.write("compose", compose)
             self.seed_demo_photo()
             runner.run(compose_command(self.store, "up", "-d", "--wait", "--wait-timeout", "180", "database"), timeout=240)
@@ -121,6 +127,14 @@ class Orchestrator:
             log("Starting the ecosystem and waiting for service health checks.")
             runner.run(compose_command(self.store, "up", "-d", "--wait", "--wait-timeout", "240", "--remove-orphans"), timeout=360)
             request_backend(config, credentials, "status")
+            if config.ocr_enabled:
+                log("Preparing persistent CPU OCR models for first use.")
+                runner.run(compose_command(self.store, "exec", "-T", "ocr", "python", "-c",
+                           "import easyocr; easyocr.Reader(['fr','en'], gpu=False, verbose=False)"), timeout=1200)
+            verification = request_backend(config, credentials, "verify", {})
+            failed_checks = [item["label"] + ": " + item["message"] for item in verification["checks"] if item["status"] == "error"]
+            if failed_checks:
+                raise ValueError("Station verification failed: " + "; ".join(failed_checks))
             self.store.write("installed", targets)
             self.store.write("installed-configuration", config.model_dump())
             self.store.write("updates", {"components": [{**item, "installed": targets[item["key"]], "update_available": False}
@@ -128,6 +142,7 @@ class Orchestrator:
             if manager_update:
                 self.store.write("manager-next", manager_update)
                 log("Manager update prepared. The interface will reconnect after its restart.")
+            self.store.write("transaction", None)
             log("All services are running at the selected published versions.")
         except Exception:
             if backup:
@@ -135,6 +150,7 @@ class Orchestrator:
                 try:
                     runner.run(compose_command(self.store, "stop", "backend", "frontend", "pricing", "pricing-web"), timeout=90)
                     restore_backup(self.store, runner, backup, log)
+                    self.store.write("transaction", None)
                 except Exception as recovery:
                     raise RuntimeError("Update failed and automatic recovery failed: " + runner.redact(str(recovery))) from None
             elif updating and old_compose:
@@ -142,6 +158,7 @@ class Orchestrator:
             elif not updating:
                 # A retry must be able to reclaim its ports without deleting persistent SQL data.
                 runner.run(compose_command(self.store, "stop"), timeout=120)
+                self.store.write("transaction", None)
             raise
         finally:
             if drained:
@@ -176,3 +193,20 @@ class Orchestrator:
 
     def seed_demo_photo(self):
         prepare_demo_photos(self.store.root / "data/mock-photos")
+
+    def recover_interrupted_update(self, log):
+        transaction = self.store.read("transaction", None)
+        if not transaction:
+            raise ValueError("No interrupted installation or update requires recovery.")
+        runner = self.create_runner(log)
+        runner.run(compose_command(self.store, "stop"), timeout=120)
+        if transaction.get("backup"):
+            folder = Path(transaction["backup"]).resolve()
+            if not folder.is_relative_to(self.store.root / "backups") or not folder.is_dir():
+                raise ValueError("The recovery backup is missing or outside this installation.")
+            restore_backup(self.store, runner, folder, log)
+            active = SiteConfig.model_construct(**self.store.read("installed-configuration", {}))
+            request_backend(active, self.configuration.ensure_credentials(), "maintenance", {"enabled": False})
+        (self.store.root / "manager-next.json").unlink(missing_ok=True)
+        self.store.write("transaction", None)
+        log("Recovery complete. Existing installation data was preserved.")

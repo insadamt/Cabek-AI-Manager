@@ -33,3 +33,10 @@ def test_large_private_output_is_streamed_to_file_without_logging(tmp_path):
                                        output_path=output, quiet=True)
     assert output.read_text() == 'private database contents\n'
     assert events == []
+
+
+def test_warnings_cannot_corrupt_sql_or_source_archives(tmp_path):
+    output = tmp_path / 'archive.bin'
+    CommandRunner().run([sys.executable, '-c', "import sys; sys.stdout.buffer.write(b'archive-bytes'); print('warning',file=sys.stderr)"],
+                        output_path=output, quiet=True)
+    assert output.read_bytes() == b'archive-bytes'

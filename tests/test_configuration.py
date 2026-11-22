@@ -15,10 +15,10 @@ def test_setup_preserves_and_never_returns_secrets(tmp_path):
     store = Store(tmp_path)
     configuration = Configuration(store)
     configuration.save({"github_token": "private-test-token", "nvr_password": "private-camera-password"})
-    original = configuration.credentials()
+    original = configuration.ensure_credentials()
     configuration.save({"github_token": "", "nvr_password": "", "app_port": 8280})
     assert configuration.load().github_token == "private-test-token"
-    assert configuration.credentials() == original
+    assert configuration.ensure_credentials() == original
     public = configuration.public()
     assert "github_token" not in public and "nvr_password" not in public
     assert public["github_token_configured"] is True
@@ -35,7 +35,7 @@ def test_rejects_incomplete_or_conflicting_configuration(changes):
 
 def test_compose_connects_programs_and_excludes_unwanted_frontends(tmp_path):
     config = SiteConfig()
-    credentials = Configuration(Store(tmp_path)).credentials()
+    credentials = Configuration(Store(tmp_path)).ensure_credentials()
     components = enabled_components(config)
     revisions = {item.key: {"tag": "v0.1.0", "sha": "a" * 40} for item in components}
     compose = render_compose(tmp_path, config, credentials, revisions)
@@ -45,6 +45,8 @@ def test_compose_connects_programs_and_excludes_unwanted_frontends(tmp_path):
     assert services["backend"]["environment"]["CABEK_ECONSTAT_API_TOKEN"] == services["ocr"]["environment"]["ECONSTAT_API_TOKEN"]
     assert "ports" not in services["database"]
     assert services["database"]["volumes"] == ["pricing_database:/var/lib/mysql"]
+    import os
+    assert services['backend']['user'] == f'{os.getuid()}:{os.getgid()}'
 
 
 def test_process_lock_rejects_second_mutation(tmp_path):
@@ -63,3 +65,11 @@ def test_scraper_is_excluded_from_installation_and_legacy_settings(tmp_path):
     assert 'scraper_enabled' not in configuration.public()
     configuration.save({'app_port': 8280})
     assert 'scraper_enabled' not in store.read('configuration')
+
+
+def test_nvr_password_dollar_signs_are_escaped_for_compose(tmp_path):
+    config = SiteConfig(profile='station', nvr_host='192.0.2.1', nvr_password='my$literal$password')
+    credentials = Configuration(Store(tmp_path)).ensure_credentials()
+    revisions = {item.key: {'sha': 'a' * 40} for item in enabled_components(config)}
+    compose = render_compose(tmp_path, config, credentials, revisions)
+    assert compose['services']['cameras']['environment']['RTSP_PASSWORD'] == 'my$$literal$$password'

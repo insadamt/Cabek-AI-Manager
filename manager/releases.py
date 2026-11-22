@@ -78,11 +78,8 @@ class GitHub:
                     shutil.copyfileobj(response, stream)
             else:
                 # gh handles private archive redirects without writing authentication to disk.
-                import subprocess
-                with archive.open("wb") as stream:
-                    result = subprocess.run(["gh", "api", path], stdout=stream, stderr=subprocess.PIPE, timeout=180)
-                if result.returncode:
-                    raise ValueError("Could not download the published release source.")
+                self.runner.run(["gh", "api", path], timeout=900, quiet=True, output_path=archive,
+                                progress_label="Downloading " + repository)
             extracted = Path(temporary) / "extracted"
             with tarfile.open(archive) as bundle:
                 bundle.extractall(extracted, filter="data")

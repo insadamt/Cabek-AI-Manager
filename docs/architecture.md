@@ -16,6 +16,9 @@ The host-side manager uses background jobs for operations and atomic JSON files
 for state. An OS file lock prevents concurrent mutations across manager processes.
 The UI polls persisted operation events and can display service logs. Interrupted
 operations remain visible after restart.
+An unfinished deployment leaves a durable transaction journal. The interface
+offers recovery before further mutations; recovery restores the recorded backup
+or stops an incomplete first installation without deleting its SQL data.
 
 ## Version selection
 

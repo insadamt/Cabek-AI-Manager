@@ -79,7 +79,7 @@ def create_app(root=None, watch_releases=True):
     async def validation_error(request, error):
         if isinstance(error, ValidationError):
             return JSONResponse(status_code=400, content={"error": "; ".join(item["msg"] for item in error.errors())})
-        return JSONResponse(status_code=400, content={"error": operations.runner().redact(str(error))})
+        return JSONResponse(status_code=400, content={"error": operations.create_runner().redact(str(error))})
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_error(request, error):
@@ -107,27 +107,28 @@ def create_app(root=None, watch_releases=True):
         return {"version": VERSION, "installed": store.read("installed", {}),
                 "updates": store.read("updates", {"components": [], "updates_available": False}),
                 "job": jobs.snapshot(), "application_url": f"http://localhost:{config.app_port}",
+                "recovery_required": bool(store.read("transaction", None)),
                 "configuration_pending": store.read("installed-configuration", None) != config.model_dump()}
 
     @app.get("/api/services")
     def services():
         try:
-            return {"services": service_status(store, operations.runner()), "error": None}
+            return {"services": service_status(store, operations.create_runner()), "error": None}
         except (RuntimeError, OSError) as error:
             return {"services": [], "error": str(error)}
 
     @app.get("/api/prerequisites")
     def prerequisites():
         config = configuration.load()
-        return preflight(operations.runner(), config.github_token)
+        return preflight(operations.create_runner(), config.github_token)
 
     @app.get("/api/logs/{service}")
     def logs(service: str):
         compose = store.read("compose", {})
         if service not in compose.get("services", {}):
             raise ValueError("Unknown managed service.")
-        output = operations.runner().run(compose_command(store, "logs", "--no-color", "--tail", "100", service), quiet=True)
-        return {"text": operations.runner().redact(output)}
+        output = operations.create_runner().run(compose_command(store, "logs", "--no-color", "--tail", "100", service), quiet=True)
+        return {"text": operations.create_runner().redact(output)}
 
     @app.post("/api/check-updates")
     def check_updates():
@@ -149,10 +150,16 @@ def create_app(root=None, watch_releases=True):
 
     @app.post("/api/start")
     def start():
+        if store.read("transaction", None):
+            raise ValueError("Recover the interrupted operation first.")
         if not store.read("installed", {}):
             raise ValueError("Install the ecosystem first.")
-        return jobs.submit("Start services", lambda log: operations.runner(log).run(
-            compose_command(store, "up", "-d", "--wait", "--wait-timeout", "180"), timeout=240))
+        def operation(log):
+            operations.create_runner(log).run(compose_command(store, "up", "-d", "--wait", "--wait-timeout", "180"), timeout=240)
+            from manager.configuration import SiteConfig
+            active = SiteConfig.model_construct(**store.read("installed-configuration", configuration.load().model_dump()))
+            request_backend(active, configuration.ensure_credentials(), "maintenance", {"enabled": False})
+        return jobs.submit("Start services", operation)
 
     @app.post("/api/stop")
     def stop():
@@ -160,16 +167,22 @@ def create_app(root=None, watch_releases=True):
             config = configuration.load()
             from manager.backend import drain
             try:
-                drain(config, configuration.credentials(), log)
-                operations.runner(log).run(compose_command(store, "stop"), timeout=120)
+                drain(config, configuration.ensure_credentials(), log)
+                operations.create_runner(log).run(compose_command(store, "stop"), timeout=120)
             except Exception:
-                request_backend(config, configuration.credentials(), "maintenance", {"enabled": False})
+                request_backend(config, configuration.ensure_credentials(), "maintenance", {"enabled": False})
                 raise
         return jobs.submit("Stop services", operation)
 
     @app.post("/api/resume")
     def resume():
-        return request_backend(configuration.load(), configuration.credentials(), "maintenance", {"enabled": False})
+        if store.read("transaction", None):
+            raise ValueError("Recover the interrupted operation first.")
+        return request_backend(configuration.load(), configuration.ensure_credentials(), "maintenance", {"enabled": False})
+
+    @app.post("/api/recover")
+    def recover():
+        return jobs.submit("Recover interrupted operation", operations.recover_interrupted_update, allow_pending_restart=True)
 
     app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent / "web", html=True), name="interface")
     return app

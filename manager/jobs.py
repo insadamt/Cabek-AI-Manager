@@ -35,10 +35,12 @@ class Jobs:
                 job["events"] = (job["events"] + [{"at": timestamp(), "message": message}])[-150:]
                 self.store.write("job", job)
 
-    def submit(self, name, operation):
+    def submit(self, name, operation, allow_pending_restart=False):
         with self.lock:
             if (self.snapshot() or {}).get("status") == "running":
                 raise ValueError("Another operation is already running.")
+            if self.store.read("manager-next", None) and not allow_pending_restart:
+                raise ValueError("The manager update is restarting. Reload the interface shortly.")
             job = {"id": uuid4().hex, "name": name, "status": "running", "started_at": timestamp(), "events": []}
             self.store.write("job", job)
             self.executor.submit(self.run, operation)

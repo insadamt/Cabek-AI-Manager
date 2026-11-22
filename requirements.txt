@@ -1,3 +1,16 @@
-# The local manager API and configuration DTOs depend on FastAPI and Uvicorn.
-fastapi>=0.115,<1
-uvicorn>=0.30,<1
+# Tested runtime dependency versions for the local manager API.
+# Depends on Python 3.11+; update pins as part of a manager release.
+fastapi==0.165.0
+uvicorn==0.54.0
+pydantic==2.14.4
+pydantic-core==2.50.5
+starlette==1.10.0
+anyio==4.16.0
+annotated-types==0.8.0
+annotated-doc==0.0.7
+click==8.5.1
+h11==0.16.0
+idna==3.20
+typing-extensions==4.16.0
+typing-inspection==0.4.5
+opentelemetry-api==1.45.2
