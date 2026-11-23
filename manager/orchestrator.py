@@ -17,7 +17,7 @@ from manager.provisioning import provision_pricing, configure_real_station
 from manager.releases import GitHub, version_tuple
 from manager.self_update import prepare_manager
 from manager.deployment_migration import needs_private_storage
-from manager.system import compose_command, preflight, require_free_ports
+from manager.system import compose_command, docker_is_rootless, preflight, require_free_ports
 
 
 class Orchestrator:
@@ -97,6 +97,7 @@ class Orchestrator:
         checks = preflight(runner, config.github_token)
         if not checks['ready']:
             raise ValueError('Prerequisites failed: ' + '; '.join(item['name'] for item in checks['checks'] if not item['ok']))
+        rootless = docker_is_rootless(runner)
         previous = self.store.read('installed', {})
         if previous and not updating:
             raise ValueError('The ecosystem is installed. Use Update All or Start services.')
@@ -118,7 +119,7 @@ class Orchestrator:
                 github.download(component.repository, targets[component.key]['sha'], destination)
         prepare_runtime_directories(self.store.root, config)
         credentials = self.configuration.ensure_credentials()
-        candidate = render_compose(self.store.root, config, credentials, targets)
+        candidate = render_compose(self.store.root, config, credentials, targets, rootless=rootless)
         self.store.write('candidate-compose', candidate)
         candidate_command = ['docker', 'compose', '-p', 'cabek-ai-manager', '-f', str(self.store.root / 'candidate-compose.json')]
         log('Building all applications using Manager-owned recipes and unchanged sources.')
@@ -150,6 +151,13 @@ class Orchestrator:
                 self.store.write('transaction', {'backup': str(backup), 'first_install': False})
             else:
                 self.store.write('transaction', {'backup': None, 'first_install': True})
+            # Remove only this project's containers before staging MariaDB. The shared
+            # gateway namespace cannot be recreated while dependent containers exist.
+            # This also clears leftovers from failed first installations without
+            # touching named volumes, folders, or database contents.
+            if (self.store.root / 'compose.json').exists():
+                log('Clearing old Manager containers before staging database; retaining all volumes and data.')
+                runner.run(compose_command(self.store, 'down', '--remove-orphans'), timeout=180)
             quarantine_test_artifacts(self.store, self.configuration, log)
             (data_root(self.store.root, config) / 'runtime/gateway-closed').touch(mode=0o600)
             self.store.write('compose', candidate)
@@ -158,9 +166,9 @@ class Orchestrator:
             for command in (['migrate', '--force'], ['db:seed', '--force']):
                 runner.run(compose_command(self.store, 'run', '--rm', '--no-deps', 'pricing', 'php', 'artisan', *command), timeout=240)
             provision_pricing(self.store, self.configuration, runner, log)
-            self.store.write('compose', render_compose(self.store.root, config, self.configuration.ensure_credentials(), targets))
+            self.store.write('compose', render_compose(self.store.root, config, self.configuration.ensure_credentials(), targets, rootless=rootless))
             self.import_datasets(config, targets, runner, log)
-            runner.run(compose_command(self.store, 'up', '-d', '--wait', '--wait-timeout', '300', '--remove-orphans', '--force-recreate'), timeout=420)
+            runner.run(compose_command(self.store, 'up', '-d', '--wait', '--wait-timeout', '300', '--remove-orphans'), timeout=420)
             if not self.store.read('real-operation-configured', False):
                 configure_real_station(self.store, runner)
             log('Preparing persistent OCR models and checking native application connectivity.')

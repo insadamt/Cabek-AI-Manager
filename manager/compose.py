@@ -6,6 +6,7 @@ Application source trees are read-only inputs; Docker/configuration files live h
 import hashlib
 import json
 import os
+import shlex
 from pathlib import Path
 from manager.configuration import data_root
 
@@ -35,10 +36,10 @@ def prepare_runtime_directories(root, config=None):
 
 
 def python_health(code):
-    return {'test': ['CMD', 'python', '-c', code], 'interval': '10s', 'timeout': '5s', 'retries': 18, 'start_period': '30s'}
+    return {'test': ['CMD-SHELL', 'python -c ' + shlex.quote(code)], 'interval': '10s', 'timeout': '5s', 'retries': 18, 'start_period': '30s'}
 
 
-def render_compose(root, config, credentials, revisions):
+def render_compose(root, config, credentials, revisions, *, rootless=False):
     root = Path(root).resolve()
     data = data_root(root, config)
     manager_source = root / 'sources/manager' / revisions['manager']['sha']
@@ -68,7 +69,7 @@ def render_compose(root, config, credentials, revisions):
         service = {'build': build, 'image': f'cabek-managed-{key}:{revision}-{identity}',
                    'pull_policy': 'never', 'restart': 'unless-stopped'}
         if key in ('backend', 'gateway', 'cameras', 'lighting', 'ocr'):
-            service['user'] = f'{os.getuid()}:{os.getgid()}'
+            service['user'] = '0:0' if rootless else f'{os.getuid()}:{os.getgid()}'
         if key in ('backend', 'frontend', 'cameras', 'lighting', 'ocr'):
             service['network_mode'] = 'service:gateway'
         return service
