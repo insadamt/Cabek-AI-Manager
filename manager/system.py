@@ -31,6 +31,26 @@ def preflight(runner, token=""):
             "serial_devices": [str(path) for path in Path("/dev/serial/by-id").glob("*")]}
 
 
+def docker_is_rootless(runner):
+    """Detect rootless Docker via the daemon's security options, not host UID.
+
+    In rootless Docker, container UID 0 maps to the unprivileged daemon owner;
+    container UID equal to the host user's UID maps to a subordinate host UID.
+    """
+    raw = runner.run(["docker", "info", "--format", "{{json .SecurityOptions}}"],
+                     timeout=15, quiet=True).strip()
+    if not raw:
+        # A blank response is used by mocked Docker runners in unit tests.
+        return False
+    try:
+        options = json.loads(raw)
+    except ValueError:
+        raise RuntimeError("Docker returned invalid security options; cannot determine rootless mode.") from None
+    if not isinstance(options, list) or not all(isinstance(option, str) for option in options):
+        raise RuntimeError("Docker returned unexpected security options; cannot determine rootless mode.")
+    return "name=rootless" in options
+
+
 def require_free_ports(config):
     for port in (config.app_port, config.api_port):
         with socket.socket() as listener:

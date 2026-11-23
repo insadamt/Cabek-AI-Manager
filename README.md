@@ -67,3 +67,23 @@ hardware; simulated unit-test inputs do not establish station readiness.
 ## Private demo dossiers and additive imports
 
 Native private administration, secure password initialization, sample storage, guarded E-Constat imports, backup/recovery, validation and the stable-release deployment order are documented in [the consolidated technical report](docs/private-demo-system.md). Deployment recipes remain owned by Manager.
+
+## Rootless Docker and installation recovery
+
+Manager detects Rootless Docker using the daemon security options before rendering
+Compose. Its Manager-owned Python services use container UID/GID `0:0` **only in
+rootless mode**, where namespace UID 0 maps to the unprivileged host Docker user.
+On a conventional Docker daemon the services retain the host UID/GID. This lets
+OCR create `/models/model` and `/app/output/api_uploads`, and lets the backend
+secure `/data/private-demo` with mode 0700 without granting world-write access.
+Do not apply `chmod 777` to private station directories.
+
+The installer removes **only the cabek-ai-manager Compose project's containers**
+before starting its staging database. It does not remove named volumes or bind
+mount data. The full-stack startup no longer force-recreates the gateway while
+other containers share its network namespace. Health checks use `CMD-SHELL`
+with correctly quoted Python code to survive Compose command serialization.
+
+This change requires a newly published stable Manager release and an updated
+host Manager process before a station can use it. A successful unit test does
+not replace an end-to-end installation on both rootless and rootful Docker.
