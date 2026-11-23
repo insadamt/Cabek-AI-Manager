@@ -14,15 +14,16 @@ def hardware_readiness(config):
     checks = [network_readiness(config.nvr_host)]
     try:
         result = request_native(config, '/api/cameras')
-        cameras = result.get('cameras', [])
+        configured = set(config.camera_channels)
+        cameras = [camera for camera in result.get('cameras', []) if camera.get('channel') in configured]
         online = sum(bool(camera.get('online')) for camera in cameras)
         if result.get('source') != 'tiandy':
             online = 0
         if result.get('source') == 'demo':
             checks.append({'name':'NVR cameras', 'state':'attention', 'message':'Real NVR images are not measured while prepared demo operation is selected. Network and RTSP checks remain independent.'})
         else:
-            checks.append({'name': 'NVR cameras', 'state': 'ready' if online == len(cameras) and online else 'disconnected',
-                           'message': f'{online} of {len(cameras)} configured cameras delivering images.'})
+            checks.append({'name': 'NVR cameras', 'state': 'ready' if online == len(configured) and online else 'disconnected',
+                           'message': f'{online} of {len(configured)} configured cameras delivering images.'})
     except (OSError, ValueError):
         checks.append({'name': 'NVR cameras', 'state': 'disconnected', 'message': 'NVR images are unavailable; verify its network and credentials.'})
     device = selected_serial_device(config)

@@ -24,7 +24,7 @@ and [Compose service](https://docs.docker.com/reference/compose-file/services/) 
 | USB reconnect | Re-rendering lighting omitted daemon mode and could revert Rootless UID selection. | `serial_devices.py` now detects daemon mode during reconciliation. Regression verifies UID 0 remains selected under Rootless mode. | Rootless supplementary serial-device group access needs actual station validation. |
 | Hardware diagnostics | Camera failure entered an exception handler that referenced an unassigned response. | `readiness.py` reports disconnected cameras directly and continues reporting ESP32/Shelly state. | A responding endpoint does not prove valid images or visible lighting. |
 | Lighting warnings | All exceptions appeared as `HTTPError` and were logged every second. | Backend distinguishes ESP32 unavailable (503), unsupported firmware (501), HTTP API rejection and unreachable HTTP service. Repeated identical warnings are limited to one every 30 seconds; retries continue. | No firmware or effects contract changed. |
-| Camera topology | Manager default opened 13 channels, inconsistent with the station's expected four streams. | Default channels are the existing essential mappings 4, 13, 14 and 10. Explicit saved/imported channel lists and local addresses remain unchanged. | Actual dual-sensor NVR mapping, credentials, RTSP reconnect and Ethernet routing need hardware verification. |
+| Camera topology | Manager default opened 13 channels, inconsistent with the station's expected four streams. | Default channels are the existing essential mappings 4, 13, 14 and 10. Readiness counts only configured streams, excluding optional entries in the backend registry. Explicit saved/imported channel lists and local addresses remain unchanged. | Actual dual-sensor NVR mapping, credentials, RTSP reconnect and Ethernet routing need hardware verification. |
 | Prepared result polling | Backend emitted a managed processing status without required progress fields during photo publication. | `api/private_demo/mock_results.py` publishes valid preparing progress. Regression polls the real dossier API between file writes and rejects premature result visibility. | No synthetic output is claimed as real YOLO inference. |
 | Dossier imports | Four native E-Constat sources needed confirmation against actual artifacts. | Validate/import copies, repeat validation for duplicate detection, and compare original PDFs/images/annotations byte for byte. Native importer retains IDs and rejects conflicts. | Source production directories are read-only and unchanged. |
 | Demo photos and diagnostics | Missing sample assets must remain explicit; warning/error diagnostics must not claim success. | Persistent read-only demo-photo mount remains separate from private templates. Backend/frontend regression suites cover missing samples, prepared workflows and distinct diagnostic messages. | Owner-selected demo photographs and template activation are station acceptance steps. |
@@ -55,7 +55,7 @@ consolidated report lives in Manager.
 | Frontend production build | Passed; existing large-chunk warning remains. |
 | Lighting HTTP/serial/effects tests | 93 passed with simulated serial hardware. |
 | AutoEstimate native tests | 21 passed, 69 assertions, SQLite in memory. |
-| Manager Python regression suite | 83 passed; 10 Docker scenarios are opt-in and skipped in the default run. |
+| Manager Python regression suite | 84 passed; 10 Docker scenarios are opt-in and skipped in the default run. |
 | Manager Node UI state tests | 6 passed. |
 | Every application image build | Passed against combined source snapshots. |
 | Nine-service Rootful Docker startup | Passed in project `cabek-audit-20261123`, ports 28180/28181. Production project untouched. |
@@ -78,6 +78,25 @@ progress; an initial lighting health probe assumed OpenAPI was enabled; the
 integration report parser initially treated Compose progress output as JSON; token
 verification likewise initially compared merged progress and verdict output.
 None is counted as a passing result until its corrected check is rerun.
+
+The ten Docker scenarios passed across the complete run and corrected focused
+reruns. In particular, both complete successful update and an injected failure
+after native migrations completed their real recovery checks. No production
+project was replaced. The final SQL recovery retains the database and grants.
+
+Published component targets:
+
+| Repository | Stable version |
+| --- | --- |
+| Cabek-AI-Manager | [v0.3.3](https://github.com/insadamt/Cabek-AI-Manager/releases/tag/v0.3.3) |
+| Cabek-AI-Backend | [v0.3.0](https://github.com/insadamt/Cabek-AI-Backend/releases/tag/v0.3.0) |
+| Cabek-AI-Frontend | [v0.3.0](https://github.com/insadamt/Cabek-AI-Frontend/releases/tag/v0.3.0) |
+| Cabek-EConstat-OCR | [v0.1.2](https://github.com/insadamt/Cabek-EConstat-OCR/releases/tag/v0.1.2) |
+| Cabek-Autoestimate-Backend | [v0.1.2](https://github.com/insadamt/Cabek-Autoestimate-Backend/releases/tag/v0.1.2) |
+| Cabek-AI-Cam | v0.1.1 (unchanged) |
+| Cabek-Capture-Lights | v0.1.1 (unchanged) |
+
+Manager review: [PR #2](https://github.com/insadamt/Cabek-AI-Manager/pull/2).
 
 ## Reproducible checks
 

@@ -168,3 +168,15 @@ def test_pricing_verdict_ignores_compose_progress_without_regenerating_credentia
             return ' Container cabek-pricing-run Creating\n Container cabek-pricing-run Created\nvalid\n'
     provision_pricing(store, configuration, ComposeRunner(), lambda message: None)
     assert store.read('credentials') == credentials
+
+
+def test_four_stream_readiness_ignores_unconfigured_optional_camera_registry(monkeypatch):
+    monkeypatch.setattr('manager.network_diagnostics.network_readiness', lambda host: {})
+    configured = SiteConfig().camera_channels
+    catalog = {'source': 'tiandy', 'cameras': [
+        {'channel': channel, 'online': channel in configured} for channel in range(1, 15)]}
+    monkeypatch.setattr('manager.readiness.request_native', lambda config, path:
+        catalog if path == '/api/cameras' else {'output': False})
+    check = next(item for item in hardware_readiness(SiteConfig()) if item.get('name') == 'NVR cameras')
+    assert check['state'] == 'ready'
+    assert check['message'] == '4 of 4 configured cameras delivering images.'
