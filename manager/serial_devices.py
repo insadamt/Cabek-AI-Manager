@@ -7,7 +7,7 @@ from manager.backend import drain, request_native, resume
 from manager.compose import selected_serial_device, render_compose
 from manager.configuration import Configuration, SiteConfig
 from manager.native_idle import idle_station
-from manager.system import compose_command
+from manager.system import compose_command, docker_is_rootless
 
 
 def device_signature(config):
@@ -36,7 +36,8 @@ def attach_serial(store, runner, log):
         return
     credentials = Configuration(store).ensure_credentials()
     original = store.read('compose')
-    replacement = render_compose(store.root, config, credentials, store.read('installed'))
+    replacement = render_compose(store.root, config, credentials, store.read('installed'),
+                                 rootless=docker_is_rootless(runner))
     changed = False
     try:
         drain(config, credentials, log)

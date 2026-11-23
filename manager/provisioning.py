@@ -13,12 +13,14 @@ def provision_pricing(store, configuration, runner, log):
     token = credentials.get('autoestimate_token', '')
     command = compose_command(store, 'run', '--rm', '--no-deps', '-T', 'pricing')
     if token:
-        try:
-            runner.run([*command, 'php', '/manager/check-client.php'], input_text=token, quiet=True)
+        output = runner.run([*command, 'php', '/manager/check-client.php'], input_text=token, quiet=True)
+        # Compose emits container progress on stderr, merged with command output by the runner.
+        verdicts = [line.strip() for line in output.splitlines() if line.strip() in ('valid', 'invalid')]
+        if verdicts == ['valid']:
             log('Existing AutoEstimate credentials verified and retained.')
             return
-        except RuntimeError:
-            pass
+        if verdicts != ['invalid']:
+            raise ValueError('AutoEstimate credential verification returned an unexpected response; existing token retained.')
     name = 'Cabek AI Manager ' + secrets.token_hex(8)
     output = runner.run([*command, 'php', 'artisan', 'api:token:create', name], quiet=True)
     match = re.search(r'\bcae_[A-Za-z0-9]{64}\b', output)

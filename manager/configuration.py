@@ -21,7 +21,7 @@ class SiteConfig(BaseModel):
     nvr_host: str = ""
     nvr_user: str = "admin"
     nvr_password: str = ""
-    camera_channels: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14])
+    camera_channels: list[int] = Field(default_factory=lambda: [4, 13, 14, 10])
     serial_device: str = "auto"
     interior_url: str = ""
     interior_switch_id: int = Field(default=0, ge=0)
@@ -122,6 +122,9 @@ class Configuration:
 
     def ensure_credentials(self):
         values = self.store.read("credentials", {})
+        if 'database' in self.store.read('compose', {}).get('services', {}):
+            if any(not values.get(key) for key in ('db_password', 'db_root_password', 'app_key')):
+                raise ValueError('Existing database credentials are incomplete. Recover credentials from a verified backup before continuing.')
         for key in ("db_password", "db_root_password", "camera_key", "ocr_token", "gateway_key"):
             values.setdefault(key, secrets.token_urlsafe(36))
         values.setdefault("app_key", "base64:" + base64.b64encode(secrets.token_bytes(32)).decode())

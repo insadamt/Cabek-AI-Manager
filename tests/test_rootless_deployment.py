@@ -83,16 +83,19 @@ def test_first_install_removes_stale_containers_before_starting_database(tmp_pat
     monkeypatch.setattr("manager.commands.CommandRunner.run", run)
     monkeypatch.setattr("manager.orchestrator.prepare_manager", lambda *args: None)
     monkeypatch.setattr("manager.orchestrator.provision_pricing", lambda *args: None)
+    monkeypatch.setattr("manager.orchestrator.initialize_storage", lambda *args, **kwargs: None)
     monkeypatch.setattr("manager.orchestrator.request_native", lambda *args: {})
     monkeypatch.setattr("manager.orchestrator.resume", lambda *args: None)
     monkeypatch.setattr("manager.serial_devices.device_signature", lambda *args: None)
 
     Orchestrator(store, configuration).install(lambda message: None)
 
-    down = next(i for i, c in enumerate(commands) if c[-2:] == ["down", "--remove-orphans"])
+    removal = next(i for i, c in enumerate(commands) if "rm" in c and c[-1] == "gateway")
     db = next(i for i, c in enumerate(commands) if c[-1] == "database" and "up" in c)
     full = next(i for i, c in enumerate(commands) if "up" in c and "300" in c)
-    assert down < db < full
+    assert removal < db < full
+    assert not any('down' in command for command in commands)
+    assert '--no-recreate' in commands[db]
     assert "--force-recreate" not in commands[full]
     assert store.read("compose")["services"]["ocr"]["user"] == "0:0"
     assert store.read("installed")["manager"]["tag"] == "v1.0.0"

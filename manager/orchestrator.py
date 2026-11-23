@@ -18,6 +18,8 @@ from manager.releases import GitHub, version_tuple
 from manager.self_update import prepare_manager
 from manager.deployment_migration import needs_private_storage
 from manager.system import compose_command, docker_is_rootless, preflight, require_free_ports
+from manager.lifecycle import remove_application_containers, start_database, start_applications
+from manager.runtime_storage import initialize_storage
 
 
 class Orchestrator:
@@ -64,6 +66,12 @@ class Orchestrator:
         saved = self.store.read('installed-configuration', self.configuration.load().model_dump())
         return SiteConfig.model_construct(**{key: value for key, value in saved.items() if key not in RETIRED_FIELDS})
 
+    def render_candidate(self, config, credentials, targets, *, rootless):
+        candidate = render_compose(self.store.root, config, credentials, targets, rootless=rootless)
+        # Project identity also identifies the existing MariaDB named volume.
+        candidate['name'] = self.store.read('compose', {}).get('name', candidate['name'])
+        return candidate
+
     def stop(self, log):
         config = self.active_configuration()
         credentials = self.configuration.ensure_credentials()
@@ -101,7 +109,7 @@ class Orchestrator:
         previous = self.store.read('installed', {})
         if previous and not updating:
             raise ValueError('The ecosystem is installed. Use Update All or Start services.')
-        if not previous:
+        if not previous and not self.store.read('compose', {}):
             require_free_ports(config)
         updates = self.check_updates()
         failures = [item['name'] + ': ' + item['error'] for item in updates['components'] if item['error']]
@@ -119,9 +127,9 @@ class Orchestrator:
                 github.download(component.repository, targets[component.key]['sha'], destination)
         prepare_runtime_directories(self.store.root, config)
         credentials = self.configuration.ensure_credentials()
-        candidate = render_compose(self.store.root, config, credentials, targets, rootless=rootless)
+        candidate = self.render_candidate(config, credentials, targets, rootless=rootless)
         self.store.write('candidate-compose', candidate)
-        candidate_command = ['docker', 'compose', '-p', 'cabek-ai-manager', '-f', str(self.store.root / 'candidate-compose.json')]
+        candidate_command = ['docker', 'compose', '-p', candidate['name'], '-f', str(self.store.root / 'candidate-compose.json')]
         log('Building all applications using Manager-owned recipes and unchanged sources.')
         runner.run([*candidate_command, 'config', '--quiet'], timeout=30)
         runner.run([*candidate_command, 'build'], timeout=3600)
@@ -130,6 +138,7 @@ class Orchestrator:
         backup = None
         drained = False
         backend_stopped = False
+        storage_initialized = False
         committed = False
         old_compose = self.store.read('compose', {})
         legacy = bool(old_compose) and 'gateway' not in old_compose.get('services', {})
@@ -138,11 +147,13 @@ class Orchestrator:
                 drained = True
                 drain(previous_config, credentials, log)
                 with idle_station(self.store.root, previous_config, lambda path: request_native(previous_config, path), log):
+                    self.store.write('transaction', {'backup': None, 'first_install': False, 'phase': 'before-backup'})
                     runner.run(compose_command(self.store, 'stop', 'backend'), timeout=120)
                     backend_stopped = True
+                initialize_storage(self.store.root, config, candidate, runner, rootless=rootless)
+                storage_initialized = True
                 backup = create_backup(self.store, runner, log)
                 self.store.write('transaction', {'backup': str(backup), 'first_install': False})
-                runner.run(compose_command(self.store, 'stop'), timeout=120)
             elif legacy:
                 correction = self.store.read('correction', {})
                 if not correction.get('backup'):
@@ -151,28 +162,37 @@ class Orchestrator:
                 self.store.write('transaction', {'backup': str(backup), 'first_install': False})
             else:
                 self.store.write('transaction', {'backup': None, 'first_install': True})
-            # Remove only this project's containers before staging MariaDB. The shared
-            # gateway namespace cannot be recreated while dependent containers exist.
-            # This also clears leftovers from failed first installations without
-            # touching named volumes, folders, or database contents.
-            if (self.store.root / 'compose.json').exists():
-                log('Clearing old Manager containers before staging database; retaining all volumes and data.')
-                runner.run(compose_command(self.store, 'down', '--remove-orphans'), timeout=180)
+                if 'database' in old_compose.get('services', {}):
+                    remove_application_containers(self.store, runner)
+                    initialize_storage(self.store.root, config, candidate, runner, rootless=rootless)
+                    storage_initialized = True
+                    start_database(self.store, runner)
+                    backup = create_backup(self.store, runner, log)
+                    self.store.write('transaction', {'backup': str(backup), 'first_install': True})
+            log('Removing application namespace consumers before the gateway; retaining MariaDB.')
+            remove_application_containers(self.store, runner)
+            log('Initializing persistent storage and verifying Docker user mapping.')
+            if not storage_initialized:
+                initialize_storage(self.store.root, config, candidate, runner, rootless=rootless)
             quarantine_test_artifacts(self.store, self.configuration, log)
             (data_root(self.store.root, config) / 'runtime/gateway-closed').touch(mode=0o600)
             self.store.write('compose', candidate)
-            runner.run(compose_command(self.store, 'up', '-d', '--wait', '--wait-timeout', '180', 'database'), timeout=240)
+            start_database(self.store, runner)
             log('Applying native migrations, canonical seeders, and pricing initialization.')
             for command in (['migrate', '--force'], ['db:seed', '--force']):
                 runner.run(compose_command(self.store, 'run', '--rm', '--no-deps', 'pricing', 'php', 'artisan', *command), timeout=240)
             provision_pricing(self.store, self.configuration, runner, log)
-            self.store.write('compose', render_compose(self.store.root, config, self.configuration.ensure_credentials(), targets, rootless=rootless))
+            self.store.write('compose', self.render_candidate(config, self.configuration.ensure_credentials(), targets, rootless=rootless))
             self.import_datasets(config, targets, runner, log)
-            runner.run(compose_command(self.store, 'up', '-d', '--wait', '--wait-timeout', '300', '--remove-orphans'), timeout=420)
+            start_applications(self.store, runner)
             if not self.store.read('real-operation-configured', False):
                 configure_real_station(self.store, runner)
-            log('Preparing persistent OCR models and checking native application connectivity.')
-            runner.run(compose_command(self.store, 'exec', '-T', 'ocr', 'python', '-c', "import easyocr; easyocr.Reader(['fr','en'], gpu=False, verbose=False)"), timeout=1200)
+            log('Preparing cached French/English OCR models on CPU; initial downloads may take several minutes.')
+            try:
+                runner.run(compose_command(self.store, 'exec', '-T', 'ocr', 'python', '-c', "import easyocr; easyocr.Reader(['fr','en'], gpu=False, verbose=False)"), timeout=1200)
+            except RuntimeError as error:
+                raise RuntimeError('OCR model preparation failed. Check connectivity and available disk space; cached models are preserved for retry. ' + str(error)) from error
+            log('OCR models ready. Checking native backend, pricing and camera API connectivity.')
             request_native(config, '/api/settings/operation')
             request_native(config, '/api/vehicles/marques')
             request_native(config, '/api/cameras')
@@ -208,12 +228,13 @@ class Orchestrator:
             elif previous:
                 if backend_stopped:
                     runner.run(compose_command(self.store, 'up', '-d', '--no-deps', '--wait', 'backend'), timeout=180)
+                self.store.write('transaction', None)
             elif self.store.read('transaction', None):
                 runner.run(compose_command(self.store, 'stop'), timeout=120)
                 self.store.write('transaction', None)
             raise
         finally:
-            if drained:
+            if drained and not self.store.read('transaction', None):
                 try:
                     resume(config if self.store.read('installed', {}) == targets else previous_config, self.configuration.ensure_credentials())
                 except OSError:
@@ -255,6 +276,10 @@ class Orchestrator:
             restore_backup(self.store, runner, folder, log)
             if 'gateway' in self.store.read('compose', {}).get('services', {}):
                 resume(self.active_configuration(), self.configuration.ensure_credentials())
+        elif not transaction.get('first_install', True):
+            start_database(self.store, runner)
+            start_applications(self.store, runner)
+            resume(self.active_configuration(), self.configuration.ensure_credentials())
         (self.store.root / 'manager-next.json').unlink(missing_ok=True)
         self.store.write('transaction', None)
         log('Recovery complete; installation data preserved.')

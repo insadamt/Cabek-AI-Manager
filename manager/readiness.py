@@ -24,10 +24,7 @@ def hardware_readiness(config):
             checks.append({'name': 'NVR cameras', 'state': 'ready' if online == len(cameras) and online else 'disconnected',
                            'message': f'{online} of {len(cameras)} configured cameras delivering images.'})
     except (OSError, ValueError):
-        if result.get('source') == 'demo':
-            checks.append({'name':'NVR cameras', 'state':'attention', 'message':'Real NVR images are not measured while prepared demo operation is selected. Network and RTSP checks remain independent.'})
-        else:
-            checks.append({'name': 'NVR cameras', 'state': 'disconnected', 'message': 'NVR images are unavailable; verify its network and credentials.'})
+        checks.append({'name': 'NVR cameras', 'state': 'disconnected', 'message': 'NVR images are unavailable; verify its network and credentials.'})
     device = selected_serial_device(config)
     checks.append({'name': 'ESP32 lighting', 'state': 'detected' if device else 'disconnected',
                    'message': 'USB device detected. Verify actual output with Cabek lighting controls.' if device else 'Connect the configured ESP32 USB device. The lighting application remains installed.'})

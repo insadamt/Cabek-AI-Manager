@@ -78,11 +78,13 @@ OCR create `/models/model` and `/app/output/api_uploads`, and lets the backend
 secure `/data/private-demo` with mode 0700 without granting world-write access.
 Do not apply `chmod 777` to private station directories.
 
-The installer removes **only the cabek-ai-manager Compose project's containers**
-before starting its staging database. It does not remove named volumes or bind
-mount data. The full-stack startup no longer force-recreates the gateway while
-other containers share its network namespace. Health checks use `CMD-SHELL`
-with correctly quoted Python code to survive Compose command serialization.
+The installer removes only this project's application containers, with namespace
+consumers before their gateway, and retains the existing MariaDB container and
+named volume. A scoped initializer repairs writable ownership and verifies the
+daemon's actual host mapping; application containers drop all capabilities.
+Health checks use quoted `CMD-SHELL` Python programs and cover all nine services.
+Backups include OCR models and are validated before rollback. See the
+[deployment audit, verification matrix and safe upgrade procedure](docs/deployment-audit-2026-11.md).
 
 This change requires a newly published stable Manager release and an updated
 host Manager process before a station can use it. A successful unit test does
