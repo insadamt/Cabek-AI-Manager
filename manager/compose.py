@@ -30,9 +30,9 @@ def selected_serial_device(config):
 
 
 def prepare_runtime_directories(root, config=None):
-    data = data_root(root, config) if config else Path(root) / 'data'
-    for name in ('dossiers', 'runtime', 'ocr-output', 'ocr-models', 'demo-photos', 'private-demo'):
-        (data / name).mkdir(parents=True, exist_ok=True)
+    from manager.configuration import SiteConfig
+    from manager.runtime_storage import prepare_directories
+    prepare_directories(root, config or SiteConfig())
 
 
 def python_health(code):
@@ -70,6 +70,8 @@ def render_compose(root, config, credentials, revisions, *, rootless=False):
                    'pull_policy': 'never', 'restart': 'unless-stopped'}
         if key in ('backend', 'gateway', 'cameras', 'lighting', 'ocr'):
             service['user'] = '0:0' if rootless else f'{os.getuid()}:{os.getgid()}'
+            service['cap_drop'] = ['ALL']
+            service['security_opt'] = ['no-new-privileges:true']
         if key in ('backend', 'frontend', 'cameras', 'lighting', 'ocr'):
             service['network_mode'] = 'service:gateway'
         return service
@@ -96,6 +98,8 @@ def render_compose(root, config, credentials, revisions, *, rootless=False):
     pricing['depends_on'] = {'database': {'condition': 'service_healthy'}}
     pricing['volumes'] = [f"{source('autoestimate')}/data:/imports/bundled:ro", f'{recipes}/autoestimate:/manager:ro']
     pricing['volumes'] += [f'{path}:/imports/custom-{index}:ro' for index, path in enumerate(config.dataset_paths)]
+    pricing['healthcheck'] = {'test': ['CMD', 'php', '/manager/health.php'], 'interval': '10s',
+                              'timeout': '5s', 'retries': 18, 'start_period': '30s'}
     pricing_web = application('autoestimate', 'nginx')
     pricing_web['depends_on'] = ['pricing']
     pricing_web['healthcheck'] = {'test': ['CMD', 'wget', '-qO-', 'http://127.0.0.1/up'], 'interval': '10s', 'timeout': '5s', 'retries': 18}
@@ -110,7 +114,7 @@ def render_compose(root, config, credentials, revisions, *, rootless=False):
     if device:
         lights['devices'] = [f'{device.resolve()}:/dev/cabek-esp32']
         lights['group_add'] = [str(device.stat().st_gid)]
-    lights['healthcheck'] = python_health("import socket; socket.create_connection(('127.0.0.1',9001),3).close()")
+    lights['healthcheck'] = python_health("import http.client; c=http.client.HTTPConnection('127.0.0.1',9001,timeout=3); c.request('GET','/api/lights/set'); r=c.getresponse(); assert r.status==405 and 'POST' in r.getheader('Allow','')")
     ocr = application('ocr')
     ocr['environment'] = {'ECONSTAT_API_TOKEN': credentials['ocr_token'], 'EASYOCR_MODULE_PATH': '/models',
                           'OMP_NUM_THREADS': '4', 'TORCH_HOME': '/tmp/torch'}

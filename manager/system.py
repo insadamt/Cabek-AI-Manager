@@ -40,8 +40,7 @@ def docker_is_rootless(runner):
     raw = runner.run(["docker", "info", "--format", "{{json .SecurityOptions}}"],
                      timeout=15, quiet=True).strip()
     if not raw:
-        # A blank response is used by mocked Docker runners in unit tests.
-        return False
+        raise RuntimeError('Docker returned empty security options; cannot determine rootless mode.')
     try:
         options = json.loads(raw)
     except ValueError:

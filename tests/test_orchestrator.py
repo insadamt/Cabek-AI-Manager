@@ -12,6 +12,11 @@ from manager.releases import GitHub
 from manager.storage import Store
 
 
+@pytest.fixture(autouse=True)
+def mock_daemon_mode(monkeypatch):
+    monkeypatch.setattr('manager.orchestrator.docker_is_rootless', lambda runner: False)
+
+
 def revision(tag="v1.0.0", sha="a" * 40):
     return {"tag": tag, "sha": sha, "url": "https://github.com/test/releases/1", "release_id": 1,
             "published_at": "2026-11-21", "notes": ""}
@@ -125,6 +130,7 @@ def test_new_writes_reopen_only_after_durable_deployment_state(tmp_path,monkeypa
     monkeypatch.setattr('manager.orchestrator.idle_station',lambda *args:nullcontext())
     monkeypatch.setattr('manager.orchestrator.create_backup',lambda *args:tmp_path/'backups/snapshot')
     monkeypatch.setattr('manager.orchestrator.provision_pricing',lambda *args:None)
+    monkeypatch.setattr('manager.orchestrator.initialize_storage',lambda *args,**kwargs:None)
     monkeypatch.setattr('manager.orchestrator.configure_real_station',lambda *args:pytest.fail('An update must preserve existing native operation preferences'))
     monkeypatch.setattr('manager.orchestrator.request_native',lambda *args:{'demo_mode':False})
     monkeypatch.setattr('manager.serial_devices.device_signature',lambda *args:None)

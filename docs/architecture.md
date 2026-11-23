@@ -66,8 +66,9 @@ is idle. Multiple devices require an explicit stable selection.
    Work waiting for vehicle metadata leaves the update unapplied with an explanation.
 5. Stop the backend only after native work is idle, then back up SQL, dossiers,
    runtime state, OCR output, configuration, imports, and installed revisions.
-6. Journal the transaction, stop remaining services, run native migrations/seeders,
-   provision/reuse credentials, and import new datasets.
+6. Journal before stopping backend, validate the backup, remove application
+   namespace consumers before gateway, retain MariaDB with `--no-recreate`, run
+   native migrations/seeders, provision/reuse credentials and import datasets.
 7. Start the complete stack, set real camera operation through its existing API,
    check native connectivity, and open admission. Hardware may remain disconnected.
 8. Publish installed revisions, clear the transaction, and queue a prepared Manager restart.
@@ -96,3 +97,7 @@ quarantined files and pre-correction backups are never silently deleted.
 - [ ] Confirm tags/drafts/prereleases produce no notice; published stable releases do.
 - [ ] Verify Update All waits for accepted work and preserves credentials and data.
 - [ ] Verify failed deployment recovery and Manager restart retain the prior station state.
+
+The [November deployment audit](deployment-audit-2026-11.md) records the subsequent
+Rootless mapping initializer, all-nine-service software checks, database retention,
+validated model-inclusive backups, real Docker evidence and station acceptance limits.
